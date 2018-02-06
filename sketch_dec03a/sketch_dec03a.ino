@@ -159,10 +159,10 @@ void loop() {
             char* gtw_token = strtok(gtw, ".");
             int n = 1;
             while (gtw_token != NULL) {
-              if (n == 1) Serial.println(gtw_token);
-              if (n == 2) Serial.println(gtw_token);
-              if (n == 3) Serial.println(gtw_token);
-              if (n == 4) Serial.println(gtw_token);
+              if (n == 1) EEPROM.write(5,atoi(gtw_token));
+              if (n == 2) EEPROM.write(6,atoi(gtw_token));
+              if (n == 3) EEPROM.write(7,atoi(gtw_token));
+              if (n == 4) EEPROM.write(8,atoi(gtw_token));
               gtw_token = strtok(NULL,".");
               n++;
             }
@@ -176,10 +176,10 @@ void loop() {
             char* dns_token = strtok(dns,".");
             int n = 1;
             while (dns_token != NULL) {
-              if (n == 1) Serial.println(dns_token);
-              if (n == 2) Serial.println(dns_token);
-              if (n == 3) Serial.println(dns_token);
-              if (n == 4) Serial.println(dns_token);
+              if (n == 1) EEPROM.write(9,atoi(dns_token));
+              if (n == 2) EEPROM.write(10,atoi(dns_token));
+              if (n == 3) EEPROM.write(11,atoi(dns_token));
+              if (n == 4) EEPROM.write(12,atoi(dns_token));
               dns_token = strtok(NULL,".");
               n++;
             }
