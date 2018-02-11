@@ -46,9 +46,11 @@ static word resetPage() {
     "<p> <em> IP address: </em> </p>"
     "<p> <input type = 'text' name = 'ip' size = 20> </p>"
     "<p> <em> Gateway address: </em> </p>"
-    "<input type = 'text' name = 'gtw' size = 20 placeholder = 'not necessary for LAN'>"
+    "<input type = 'text' name = 'gtw' size = 20>"
     "<p> <em> DNS address: </em> </p>"
-    "<input type = 'text' name = 'dns' size = 20 placeholder = 'not necessary for LAN'>"
+    "<input type = 'text' name = 'dns' size = 20>"
+    "<p> <em> Subnet mask </em> </p>"
+    "<p> <input type = 'text' name = 'subm' size = 20>"
     "<p> <input type = 'submit' value = 'Submit'> </p>"
     "</form>"
     "</center>"
@@ -130,7 +132,7 @@ void loop() {
   if(pos) {
     if (EEPROM.read(0) == 1) {
       char *post_pos = strstr((char *) Ethernet::buffer + pos,"ip=");
-      char *ip ,*gtw, *dns, *last;
+      char *ip ,*gtw, *dns, *last, *subm;
       char *token = strtok_r(post_pos, "&", &last);// делим на токены post_pos, разделитель &
       byte i = 1; // нумерация токенов
       while (token != NULL) {
@@ -184,6 +186,22 @@ void loop() {
               n++;
             }
           } else dns = 0;
+        }
+        if (i == 4) {
+          subm = token;
+          if (subm[5] != NULL) {
+            subm = strtok(subm, "subm=");
+            char* subm_token = strtok(subm,".");
+            int n = 1;
+            while (subm_token != NULL) {
+              if (n == 1) EEPROM.write(13, atoi(subm_token));
+              if (n == 2) EEPROM.write(14, atoi(subm_token));
+              if (n == 3) EEPROM.write(15, atoi(subm_token));
+              if (n == 4) EEPROM.write(16, atoi(subm_token));
+              subm_token = strtok(NULL, ".");
+              n++;
+            }
+          } else subm = 0;
         }
         token = strtok_r(NULL, "&" ,&last); // выделение следующей части строки (поиск нового токена и выделение его)
         i++; //нужен для определения какой на данный момент номер токена
