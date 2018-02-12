@@ -27,7 +27,6 @@ int interval = 10000; // Сколько будет светиться свето
 
 BufferFiller bfill;
 // Функция программной перезагрузки ардуино
-void (* restartArduino) (void) = 0;
 
 static word resetPage() {
   bfill = ether.tcpOffset();
@@ -83,7 +82,7 @@ static word controlPage() {
 
 
 void setup() {
-  EEPROM.write(0,0);
+  EEPROM.write(0,1);
   pinMode(D1, INPUT); // Подключение датчка D1 на вход.
   pinMode(D2, INPUT); // Подключение датчка D1 на вход.
   pinMode(S3, OUTPUT); // Подключение светодиода S3 на выход.
@@ -97,7 +96,7 @@ void setup() {
     ether.staticSetup(myip);
   } else Serial.println("Error with EEPROM");
   
-  //if(!ether.dhcpSetup()) Serial.println("DHCP Failed"); //Установка сетевых параметров по DHCP
+  if(!ether.dhcpSetup()) Serial.println("DHCP Failed"); //Установка сетевых параметров по DHCP
   ether.printIp("Ip: ", ether.myip);
   ether.printIp("Netmask: ", ether.netmask);
   ether.printIp("GW Ip:" ,ether.gwip);
