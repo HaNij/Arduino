@@ -13,7 +13,7 @@
 
 #include "EtherCard.h"
 #include "EEPROM.h"
-#include <rBase64.h>
+#include <Base64.h>
 
 static byte mymac[] = {0x74,0x69,0x69,0x2D,0x30,0x32};
 static byte myip[] = {EEPROM.read(1),EEPROM.read(2),EEPROM.read(3),EEPROM.read(4)};
@@ -22,8 +22,8 @@ static byte defip[] = {192,168,0,13};
 static byte defgtw[] = {}; //need to setup
 static byte defdns[] = {}; //need to setup
 static byte defnetmask = {}; //need to setup
-static String deflogin = "login";
-static String defpassword = "password";
+char authlog[] = "123:123"; // login:password
+bool isActivatedSession = false;
 
 byte Ethernet::buffer[1000];
 
@@ -42,10 +42,11 @@ static word resetPage();
 static word controlPage();
 void setPage(int page);
 bool isAvailable();
-String encode();
+char* encode(String lg, String ps);
 
 void setup() {
-  EEPROM.write(0,1);
+  isActivatedSession = false;
+  EEPROM.write(0,0);
   pinMode(D1, INPUT); // Подключение датчка D1 на вход.
   pinMode(D2, INPUT); // Подключение датчка D1 на вход.
   pinMode(S3, OUTPUT); // Подключение светодиода S3 на выход.
@@ -96,16 +97,22 @@ void loop() {
     data = (char *) Ethernet::buffer + pos;
     if (EEPROM.read(0) == 1) {
       setPage(1);
-    } else {
-      setPage(2);
+    } else  if (EEPROM.read(0) == 0) {
+      setPage(0);
     }
   }
 }
 
 void setPage(int page) {
-  if (isAvailable()) {
-    switch(page) {
-    case 0: ether.httpServerReply(controlPage()); break;
+  switch(page) {
+    case 0: {
+      if (isAvailable() && isActivatedSession) {
+      ether.httpServerReply(controlPage());
+      break;
+      } else {
+        ether.httpServerReply(http_Unauthorized());
+      }
+    }
     case 1: {
       char *post = strstr((char *) data,"ip=");
       char* buffer;
@@ -198,23 +205,20 @@ void setPage(int page) {
     }
     default: break;
   }
-} else ether.httpServerReply(http_Unauthorized());
-}
-
-String encode(String lg, String ps) {
-  String text;
-  text += lg;
-  text += ":";
-  text += ps;
-  return rbase64.encode(text);
 }
 
 bool isAvailable() {
-  char hash[encode(deflogin, defpassword).length()];
-  encode(deflogin, defpassword).toCharArray(hash, encode(deflogin,defpassword).length());
-  if(strstr(data, hash) != NULL) {
-    return true;
-  } else return false;
+  int inputStringLength = sizeof(authlog)-1;
+  int encodedLength = Base64.encodedLength(inputStringLength);
+  char encodedString[encodedLength];
+  Base64.encode(encodedString, authlog, inputStringLength);
+   if (strstr(data, encodedString) != NULL) {
+     isActivatedSession = true;
+     return true;
+   } else {
+     isActivatedSession = false;
+     return false;
+   }
 }
 
 static word resetPage() {
@@ -256,24 +260,11 @@ static word http_Unauthorized() {
   bfill = ether.tcpOffset();
   bfill.emit_p(PSTR(
     "HTTP/1.0 401 Unauthorized\r\n"
+    "WWW-Authenticate: Basic realm=\"Access\""
     "Content-Type: text/html\r\n\r\n"
     "<h1>401 Unauthorized</h1>"));
   return bfill.position();
 }
-static word controlPage() {
-bfill = ether.tcpOffset();
-  bfill.emit_p(PSTR(
-  "HTTP/1.0 200 OK\r\n"
-    "Content-Type: text/html\r\n"
-    "Pragma: no-cache\r\n"
-    "\r\n"
-    "<title> Control Page </title>"
-    "<body text = '#505452' bgcolor = '#f2f2f2'>"
-    "<h2 align = 'center'> Control Arduino </h2>"
-    "<hr>"
-    "<p align = 'right'>by Savinov (KS-234) ver 1.0.2018</p>"
-    "<center>"
-    "<p> ledStatus:</p>"
 
 static word controlPage() {
 bfill = ether.tcpOffset();
