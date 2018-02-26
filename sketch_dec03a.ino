@@ -206,9 +206,11 @@ void setPage(int page) {
     default: break;
   }
 }
-
+/*
+* TODO Проблема в сохранении сессии
+*/
 bool isAvailable() {
-  int inputStringLength = sizeof(authlog)-1;
+  int inputStringLength = sizeof(authlog)-1; // Вычитаем символ \0 
   int encodedLength = Base64.encodedLength(inputStringLength);
   char encodedString[encodedLength];
   Base64.encode(encodedString, authlog, inputStringLength);
