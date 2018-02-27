@@ -13,7 +13,7 @@
 
 #include "EtherCard.h"
 #include "EEPROM.h"
-#include <Base64.h>
+#include <rBase64.h>
 
 /*
 * Пины для датчиков движения
@@ -51,11 +51,11 @@ static byte defdns[] = {};
 static byte defnetmask = {};
 
 /*
-* Логин и пароль поумолчанию
+* Логин и пароль по умолчанию
 * Записывается в виде логин:пароль
 */
 
-char authlog[] = "123:123";
+String authlog = "123:123";
 
 /*
 * Перечисления страниц
@@ -93,24 +93,34 @@ int interval = 10000;
 
 static char* data;
 
+/*
+* Заполнитель буфера
+*/
+
 BufferFiller bfill;
 
+bool isActivatedSession;
+
 /*
-* Функция resetPage()
+*************************** Функции ******************************
+*/
+
+/*
+* Функция static word resetPage()
 * Возвращает страницу с настройками сетевых параметров
 */
 
 static word resetPage();
 
 /*
-* Функция controlPage()
+* Функция static word controlPage()
 * Возвращает страницу с управлением системы
 */
 
 static word controlPage();
 
 /*
-* Функция httpNotFound()
+* Функция static word httpNotFound()
 * Возращает страницу с ответом HTTP 404 Not Found (страница не найдена)
 * Используется в ошибках системы
 */
@@ -118,14 +128,14 @@ static word controlPage();
 static word httpNotFound();
 
 /*
-* Функция httpUnauthorized()
+* Функция static word httpUnauthorized()
 * Возвращает страницу авторизации
 */
 
 static word httpUnauthorized();
 
 /*
-* Функция setPage(Page p)
+* Функция static word setPage(Page p)
 * Принимает значение перечисления Page:
 *   * CONTROL - переход на страницу управления
 *   * SETTING - переход на страницу настроек
@@ -136,7 +146,7 @@ static word httpUnauthorized();
 void setPage(Page p);
 
 /*
-* Функция isAvailable()
+* Функция bool isAvailable()
 * Возвращает true, если авторизация прошла успешно
 * Кодирует TODO
 */
@@ -144,7 +154,7 @@ void setPage(Page p);
 bool isAvailable();
 
 /*
-* Функция requestHandler(char* request)
+* Функция void requestHandler(char* request)
 * Определяет какой запрос пришел (GET или POST);
 * Передает значение request соотвествующей функции (в зависимости от типа запроса);
 */
@@ -152,7 +162,7 @@ bool isAvailable();
 void requestHandler(char* request);
 
 /*
-* Функция getHandler(char* request)
+* Функция void getHandler(char* request)
 * Обрабатывает GET запросы:
 *   * Выход из controlPage и переход в httpUnauthorized
 *   * Включение\Выключение реле
@@ -161,14 +171,26 @@ void requestHandler(char* request);
 void getHandler(char* request);
 
 /*
-* Функция postHandler
+* Функция void postHandler
 * Обрабатывает POST запросы:
 *   * Получение сетевых параметров
 */
 
 void postHandler(char * request);
 
+/*
+* Функция void authorization()
+* Запускает режим авторизации в котором:
+*   * Ставиться страница AUTHENTICATION
+*   * Проверяется зашифрованный (Base64) запрос функцией isAvailable()
+*       Если все впорядке - ставится страница CONTROL
+*       Иначе требуем еще раз ввести логин и пароль
+*/
+
+void authorization();
+
 void setup() {
+  isActivatedSession = false;
   EEPROM.write(0,0);
   pinMode(SENSOR_1_PIN, INPUT); // Подключение датчка D1 на вход.
   pinMode(SENSOR_2_PIN, INPUT); // Подключение датчка D1 на вход.
@@ -219,11 +241,12 @@ void loop() {
   if(pos) {
     data = (char *) Ethernet::buffer + pos;
     requestHandler(data);
-    Serial.println(data);
     if (EEPROM.read(0) == 1) {
       setPage(SETTING);
     } else  if (EEPROM.read(0) == 0) {
-      setPage(CONTROL);
+      if (isAvailable()) {
+        setPage(CONTROL);
+      } else setPage(AUTHENTICATION);
     }
   }
 }
@@ -338,6 +361,13 @@ void setPage(Page p) {
   }
 }
 
+void authorization() {
+  setPage(AUTHENTICATION);
+  if (isAvailable()) {
+    return;
+  } else setPage(AUTHENTICATION);
+}
+
 void postHandler(char* request) {
 
 }
@@ -345,14 +375,19 @@ void postHandler(char* request) {
 void getHandler(char* request) {
   Serial.println(strstr(request, "GET /?EXIT") != NULL ? "Yes" : "No");
   if (strstr(request, "GET /?EXIT") != NULL) {
-    setPage(AUTHENTICATION);
+    authorization();
   }
 }
+
+/*
+* Если найдено совпадение с запросом GET, то передаем управление функции getHandler(char* request)
+* Тоже самое и с запросом POST
+* Если нет ниодного совпадения - отображаем страницу 404 Not Found
+*/
 
 void requestHandler(char* request) {
   if (strstr(request, "GET /") != NULL) {
     getHandler(request);
-    Serial.println("GET");
   } else if (strstr(request, "POST /") != NULL) {
     postHandler(request);
   } else {
@@ -365,15 +400,13 @@ void requestHandler(char* request) {
 */
 
 bool isAvailable() {
-  int inputStringLength = sizeof(authlog)-1; // Вычитаем символ \0
-  int encodedLength = Base64.encodedLength(inputStringLength);
-  char encodedString[encodedLength];
-  Base64.encode(encodedString, authlog, inputStringLength);
-   if (strstr(data, encodedString) != NULL) {
-     return true;
-   } else {
-     return false;
-   }
+  Serial.println(data);
+  char* temp = authlog.c_str();
+  if (strstr(data, rbase64.encode(temp).c_str()) != NULL) {
+    return true;
+  } else {
+    return false;
+  }
 }
 
 static word httpNotFound() {
@@ -424,8 +457,7 @@ static word httpUnauthorized() {
   bfill.emit_p(PSTR(
     "HTTP/1.0 401 Unauthorized\r\n"
     "WWW-Authenticate: Basic realm=\"Access\""
-    "Content-Type: text/html\r\n\r\n"
-    "<h1>401 Unauthorized</h1>"));
+    "Content-Type: text/html\r\n\r\n"));
   return bfill.position();
 }
 
