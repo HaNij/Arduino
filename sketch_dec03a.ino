@@ -15,41 +15,164 @@
 #include "EEPROM.h"
 #include <Base64.h>
 
+/*
+* Пины для датчиков движения
+*/
+
+#define SENSOR_1_PIN 10
+#define SENSOR_2_PIN 11
+#define SENSOR_3_PIN 12
+#define SENSOR_4_PIN 13
+
+/*
+* Пин кнопки сброса
+*/
+
+//TODO Выбрать номер пина
+#define BUTTON_RESET_PIN 0
+
+/*
+* Пин реле питания (свет)
+*/
+
+//TODO Выбрать номер пина
+#define RELE_PIN 0
+
 static byte mymac[] = {0x74,0x69,0x69,0x2D,0x30,0x32};
 static byte myip[] = {EEPROM.read(1),EEPROM.read(2),EEPROM.read(3),EEPROM.read(4)};
 static byte defip[] = {192,168,0,13};
 
-static byte defgtw[] = {}; //need to setup
-static byte defdns[] = {}; //need to setup
-static byte defnetmask = {}; //need to setup
-char authlog[] = "123:123"; // login:password
-bool isActivatedSession = false;
+/*
+* Настройки поумолчанию сетевых настроек
+*/
+
+static byte defgtw[] = {};
+static byte defdns[] = {};
+static byte defnetmask = {};
+
+/*
+* Логин и пароль поумолчанию
+* Записывается в виде логин:пароль
+*/
+
+char authlog[] = "123:123";
+
+/*
+* Перечисления страниц
+*/
+
+enum Page {
+  CONTROL,
+  UNKNOWN,
+  SETTING,
+  AUTHENTICATION
+};
+
+/*
+* Буфер. хер знает зачем нужен, пока оставим
+*/
 
 byte Ethernet::buffer[1000];
 
-byte D1 = 10; // Номер пина для 1-го датчика движения.
-byte D2 = 11; // Номер пина для 2-го датчика движения.
-byte S3 = 9; // Номер пина для 3-го светодиода -> в дальнейшем для реле.
-byte R1; // Номер пина кнопки сбрасывания
-long previousMillis; // Последняя отправка.
-int interval = 10000; // Сколько будет светиться светодиод (S3).
+/*
+* Последняя отправка сработки датчика движения
+*/
+
+long previousMillis;
+
+/*
+* Время включения питания реле (как долго будет светиться свет)
+* Указывается в мсек
+*/
+
+int interval = 10000;
+
+/*
+* Данные получаемые с буфера
+*/
 
 static char* data;
 
 BufferFiller bfill;
 
+/*
+* Функция resetPage()
+* Возвращает страницу с настройками сетевых параметров
+*/
+
 static word resetPage();
+
+/*
+* Функция controlPage()
+* Возвращает страницу с управлением системы
+*/
+
 static word controlPage();
-void setPage(int page);
+
+/*
+* Функция httpNotFound()
+* Возращает страницу с ответом HTTP 404 Not Found (страница не найдена)
+* Используется в ошибках системы
+*/
+
+static word httpNotFound();
+
+/*
+* Функция httpUnauthorized()
+* Возвращает страницу авторизации
+*/
+
+static word httpUnauthorized();
+
+/*
+* Функция setPage(Page p)
+* Принимает значение перечисления Page:
+*   * CONTROL - переход на страницу управления
+*   * SETTING - переход на страницу настроек
+*   * UNKNOWN - ошибка 404 (не найдено)
+*   * AUTHENTICATION - переход на страницу ввода логина и пароля
+*/
+
+void setPage(Page p);
+
+/*
+* Функция isAvailable()
+* Возвращает true, если авторизация прошла успешно
+* Кодирует TODO
+*/
+
 bool isAvailable();
-char* encode(String lg, String ps);
+
+/*
+* Функция requestHandler(char* request)
+* Определяет какой запрос пришел (GET или POST);
+* Передает значение request соотвествующей функции (в зависимости от типа запроса);
+*/
+
+void requestHandler(char* request);
+
+/*
+* Функция getHandler(char* request)
+* Обрабатывает GET запросы:
+*   * Выход из controlPage и переход в httpUnauthorized
+*   * Включение\Выключение реле
+*/
+
+void getHandler(char* request);
+
+/*
+* Функция postHandler
+* Обрабатывает POST запросы:
+*   * Получение сетевых параметров
+*/
+
+void postHandler(char * request);
 
 void setup() {
-  isActivatedSession = false;
   EEPROM.write(0,0);
-  pinMode(D1, INPUT); // Подключение датчка D1 на вход.
-  pinMode(D2, INPUT); // Подключение датчка D1 на вход.
-  pinMode(S3, OUTPUT); // Подключение светодиода S3 на выход.
+  pinMode(SENSOR_1_PIN, INPUT); // Подключение датчка D1 на вход.
+  pinMode(SENSOR_2_PIN, INPUT); // Подключение датчка D1 на вход.
+  pinMode(RELE_PIN, OUTPUT); // Подключение светодиода S3 на выход.
   Serial.begin(9600);
   if(ether.begin(sizeof Ethernet::buffer,mymac,10) == 0) {
     Serial.println("Failed to access Ethernet controller");
@@ -88,32 +211,31 @@ void loop() {
 
   // Секундомер
   if (millis() - previousMillis <= interval) {
-    digitalWrite(S3,1);
-  } else { digitalWrite(S3,0); }
+    digitalWrite(RELE_PIN, 1);
+  } else { digitalWrite(RELE_PIN, 0); }
 
 
   // Если пришел запрос - начинаем обрабатывать его
   if(pos) {
     data = (char *) Ethernet::buffer + pos;
+    requestHandler(data);
+    Serial.println(data);
     if (EEPROM.read(0) == 1) {
-      setPage(1);
+      setPage(SETTING);
     } else  if (EEPROM.read(0) == 0) {
-      setPage(0);
+      setPage(CONTROL);
     }
   }
 }
 
-void setPage(int page) {
-  switch(page) {
-    case 0: {
-      if (isAvailable() && isActivatedSession) {
+void setPage(Page p) {
+  switch(p) {
+    case CONTROL: {
       ether.httpServerReply(controlPage());
       break;
-      } else {
-        ether.httpServerReply(http_Unauthorized());
-      }
     }
-    case 1: {
+
+    case SETTING: {
       char *post = strstr((char *) data,"ip=");
       char* buffer;
       char *token = strtok_r(post, "&", &buffer);// делим на токены post_pos, разделитель &
@@ -127,11 +249,11 @@ void setPage(int page) {
             char* ip_token = strtok(ip, ".");
             byte n = 1;
             while (ip_token != NULL) {
-              //Функция atoi(char *) преобразует символьный массив и возращает число
-              if (n == 1) EEPROM.write(1,atoi(ip_token)); //Serial.println((byte) atoi(ip_token));
-              if (n == 2) EEPROM.write(2,atoi(ip_token));
-              if (n == 3) EEPROM.write(3,atoi(ip_token));
-              if (n == 4) EEPROM.write(4,atoi(ip_token));
+              //Функция atoi(char *) преобразует символьный массив и возвращает число
+              if (n == 1) EEPROM.write(1, atoi(ip_token)); //Serial.println((byte) atoi(ip_token));
+              if (n == 2) EEPROM.write(2, atoi(ip_token));
+              if (n == 3) EEPROM.write(3, atoi(ip_token));
+              if (n == 4) EEPROM.write(4, atoi(ip_token));
               ip_token = strtok(NULL,".");
               n++;
             }
@@ -145,10 +267,10 @@ void setPage(int page) {
             char* gtw_token = strtok(gtw, ".");
             int n = 1;
             while (gtw_token != NULL) {
-              if (n == 1) EEPROM.write(5,atoi(gtw_token));
-              if (n == 2) EEPROM.write(6,atoi(gtw_token));
-              if (n == 3) EEPROM.write(7,atoi(gtw_token));
-              if (n == 4) EEPROM.write(8,atoi(gtw_token));
+              if (n == 1) EEPROM.write(5, atoi(gtw_token));
+              if (n == 2) EEPROM.write(6, atoi(gtw_token));
+              if (n == 3) EEPROM.write(7, atoi(gtw_token));
+              if (n == 4) EEPROM.write(8, atoi(gtw_token));
               gtw_token = strtok(NULL,".");
               n++;
             }
@@ -162,10 +284,10 @@ void setPage(int page) {
             char* dns_token = strtok(dns,".");
             int n = 1;
             while (dns_token != NULL) {
-              if (n == 1) EEPROM.write(9,atoi(dns_token));
-              if (n == 2) EEPROM.write(10,atoi(dns_token));
-              if (n == 3) EEPROM.write(11,atoi(dns_token));
-              if (n == 4) EEPROM.write(12,atoi(dns_token));
+              if (n == 1) EEPROM.write(9, atoi(dns_token));
+              if (n == 2) EEPROM.write(10, atoi(dns_token));
+              if (n == 3) EEPROM.write(11, atoi(dns_token));
+              if (n == 4) EEPROM.write(12, atoi(dns_token));
               dns_token = strtok(NULL,".");
               n++;
             }
@@ -200,27 +322,66 @@ void setPage(int page) {
         token = strtok_r(NULL, "&" ,&buffer); // выделение следующей части строки (поиск нового токена и выделение его)
         i++; //нужен для определения какой на данный момент номер токена
       }
-    ether.httpServerReply(resetPage()); //отправить http response (отобразить страницу)
-    break;
+      ether.httpServerReply(resetPage());
+      break;
     }
-    default: break;
+
+    case UNKNOWN: {
+      ether.httpServerReply(httpNotFound());
+      break;
+    }
+
+    case AUTHENTICATION: {
+      ether.httpServerReply(httpUnauthorized());
+      break;
+    }
   }
 }
+
+void postHandler(char* request) {
+
+}
+
+void getHandler(char* request) {
+  Serial.println(strstr(request, "GET /?EXIT") != NULL ? "Yes" : "No");
+  if (strstr(request, "GET /?EXIT") != NULL) {
+    setPage(AUTHENTICATION);
+  }
+}
+
+void requestHandler(char* request) {
+  if (strstr(request, "GET /") != NULL) {
+    getHandler(request);
+    Serial.println("GET");
+  } else if (strstr(request, "POST /") != NULL) {
+    postHandler(request);
+  } else {
+    setPage(UNKNOWN);
+  }
+}
+
 /*
 * TODO Проблема в сохранении сессии
 */
+
 bool isAvailable() {
-  int inputStringLength = sizeof(authlog)-1; // Вычитаем символ \0 
+  int inputStringLength = sizeof(authlog)-1; // Вычитаем символ \0
   int encodedLength = Base64.encodedLength(inputStringLength);
   char encodedString[encodedLength];
   Base64.encode(encodedString, authlog, inputStringLength);
    if (strstr(data, encodedString) != NULL) {
-     isActivatedSession = true;
      return true;
    } else {
-     isActivatedSession = false;
      return false;
    }
+}
+
+static word httpNotFound() {
+  bfill = ether.tcpOffset();
+  bfill.emit_p(PSTR(
+    "HTTP/1.0 404 Not Found"
+  ));
+  return bfill.position();
 }
 
 static word resetPage() {
@@ -258,7 +419,7 @@ static word resetPage() {
   return bfill.position();
 }
 
-static word http_Unauthorized() {
+static word httpUnauthorized() {
   bfill = ether.tcpOffset();
   bfill.emit_p(PSTR(
     "HTTP/1.0 401 Unauthorized\r\n"
@@ -282,6 +443,7 @@ bfill = ether.tcpOffset();
     "<p align = 'right'>by Savinov (KS-234) ver 1.0.2018</p>"
     "<center>"
     "<p> ledStatus:</p>"
+    "<a href=\"?EXIT\">EXIT</a><br />"
     "</center>"
 
   ));
@@ -289,7 +451,7 @@ bfill = ether.tcpOffset();
 }
 // Возращает true, если хотя бы один из датчиков сработал.
 boolean checkSensor() {
-  if (digitalRead(D1) || digitalRead(D2)) {
+  if (digitalRead(SENSOR_1_PIN) || digitalRead(SENSOR_2_PIN)) {
     return true;
   } else return false;
 }
