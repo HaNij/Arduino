@@ -102,8 +102,14 @@ BufferFiller bfill;
 bool isActivatedSession;
 
 /*
-*************************** Функции ******************************
+*************************** HTML страницы ******************************
 */
+
+/*
+* Функция static word loginPage()
+*/
+
+static word loginPage();
 
 /*
 * Функция static word resetPage()
@@ -141,6 +147,10 @@ static word httpUnauthorized();
 *   * SETTING - переход на страницу настроек
 *   * UNKNOWN - ошибка 404 (не найдено)
 *   * AUTHENTICATION - переход на страницу ввода логина и пароля
+*/
+
+/*
+*************************** Функции ******************************
 */
 
 void setPage(Page p);
@@ -355,7 +365,7 @@ void setPage(Page p) {
     }
 
     case AUTHENTICATION: {
-      ether.httpServerReply(httpUnauthorized());
+      ether.httpServerReply(loginPage());
       break;
     }
   }
@@ -363,9 +373,6 @@ void setPage(Page p) {
 
 void authorization() {
   setPage(AUTHENTICATION);
-  if (isAvailable()) {
-    return;
-  } else setPage(AUTHENTICATION);
 }
 
 void postHandler(char* request) {
@@ -400,13 +407,34 @@ void requestHandler(char* request) {
 */
 
 bool isAvailable() {
-  Serial.println(data);
   char* temp = authlog.c_str();
   if (strstr(data, rbase64.encode(temp).c_str()) != NULL) {
     return true;
   } else {
     return false;
   }
+}
+
+static word loginPage() {
+  bfill = ether.tcpOffset();
+  bfill.emit_p(PSTR(
+    "<title> Login </title>"
+    "</head>"
+    "<body>"
+    "<body text = #505452 bgcolor = '#f2f2f2'>"
+    "<h2 align = 'center'> Access to setup </h2>"
+    "<hr>"
+    "<center>"
+    "<p> <em> Login </em>"
+    "<form method = 'get'>"
+    "<input type = 'text' name = 'login' size = 20>"
+    "<p> <em> Password </em> </p>"
+    "<input type = 'text' name = 'password' size = 20>"
+    "<p> <input type = 'submit' value = 'Submit'> </p>"
+    "</form>"
+    "</center>"
+  ));
+  return bfill.position();
 }
 
 static word httpNotFound() {
