@@ -102,17 +102,15 @@ BufferFiller bfill;
 bool isActivatedSession;
 
 /*
-<<<<<<< HEAD
-*************************** Функции ******************************
-=======
 *************************** HTML страницы ******************************
 */
 
 /*
 * Функция static word loginPage()
 * Возращает страницу авторизации
->>>>>>> 93e6cb7... Login is working. Have bugs
 */
+
+static word loginPage();
 
 /*
 * Функция static word resetPage()
@@ -147,9 +145,6 @@ static word httpUnauthorized();
 *************************** Функции ******************************
 */
 
-<<<<<<< HEAD
-void setPage(Page p);
-=======
 /*
 * Функция void authHandler(char *log, char *pass)
 * Сравнивает login и password с дефолтными login и password
@@ -158,7 +153,6 @@ void setPage(Page p);
 */
 
 void authHandler(char *log, char *pass);
->>>>>>> 93e6cb7... Login is working. Have bugs
 
 /*
 * Функция void setPage(Page p)
@@ -277,19 +271,12 @@ void setPage(Page p) {
     }
 
     case AUTHENTICATION: {
-      ether.httpServerReply(httpUnauthorized());
+      ether.httpServerReply(loginPage());
       break;
     }
   }
 }
 
-<<<<<<< HEAD
-void authorization() {
-  setPage(AUTHENTICATION);
-  if (isAvailable()) {
-    return;
-  } else setPage(AUTHENTICATION);
-=======
 void authHandler(char *log, char *pass) {
   if (strcmp(log, deflogin) == 0 && strcmp(pass, defpassword) == 0) {
     isActivatedSession = true;
@@ -298,7 +285,6 @@ void authHandler(char *log, char *pass) {
     isActivatedSession = false;
     setPage(AUTHENTICATION);
   }
->>>>>>> 93e6cb7... Login is working. Have bugs
 }
 
 void postHandler(char* request) {
@@ -437,16 +423,6 @@ void requestHandler(char* request) {
 * TODO Проблема в сохранении сессии
 */
 
-<<<<<<< HEAD
-bool isAvailable() {
-  Serial.println(data);
-  char* temp = authlog.c_str();
-  if (strstr(data, rbase64.encode(temp).c_str()) != NULL) {
-    return true;
-  } else {
-    return false;
-  }
-=======
 static word loginPage() {
   bfill = ether.tcpOffset();
   bfill.emit_p(PSTR(
@@ -467,7 +443,6 @@ static word loginPage() {
     "</center>"
   ));
   return bfill.position();
->>>>>>> 93e6cb7... Login is working. Have bugs
 }
 
 static word httpNotFound() {
