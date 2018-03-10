@@ -43,7 +43,7 @@ static byte myip[] = {EEPROM.read(1),EEPROM.read(2),EEPROM.read(3),EEPROM.read(4
 static byte defip[] = {192,168,0,13};
 
 /*
-* Настройки поумолчанию сетевых настроек
+* Настройки по умолчанию сетевых настроек
 */
 
 static byte defgtw[] = {};
@@ -52,10 +52,10 @@ static byte defnetmask = {};
 
 /*
 * Логин и пароль по умолчанию
-* Записывается в виде логин:пароль
 */
 
-String authlog = "123:123";
+char *deflogin = "123";
+char *defpassword = "123";
 
 /*
 * Перечисления страниц
@@ -102,7 +102,16 @@ BufferFiller bfill;
 bool isActivatedSession;
 
 /*
+<<<<<<< HEAD
 *************************** Функции ******************************
+=======
+*************************** HTML страницы ******************************
+*/
+
+/*
+* Функция static word loginPage()
+* Возращает страницу авторизации
+>>>>>>> 93e6cb7... Login is working. Have bugs
 */
 
 /*
@@ -135,23 +144,33 @@ static word httpNotFound();
 static word httpUnauthorized();
 
 /*
-* Функция static word setPage(Page p)
+*************************** Функции ******************************
+*/
+
+<<<<<<< HEAD
+void setPage(Page p);
+=======
+/*
+* Функция void authHandler(char *log, char *pass)
+* Сравнивает login и password с дефолтными login и password
+*   *Если login и password соотвуствуют (авторизация произошла успешно
+*                                         запускает страницу controlPage
+*/
+
+void authHandler(char *log, char *pass);
+>>>>>>> 93e6cb7... Login is working. Have bugs
+
+/*
+* Функция void setPage(Page p)
 * Принимает значение перечисления Page:
 *   * CONTROL - переход на страницу управления
 *   * SETTING - переход на страницу настроек
 *   * UNKNOWN - ошибка 404 (не найдено)
 *   * AUTHENTICATION - переход на страницу ввода логина и пароля
+* Запускает HTML страницу
 */
 
 void setPage(Page p);
-
-/*
-* Функция bool isAvailable()
-* Возвращает true, если авторизация прошла успешно
-* Кодирует TODO
-*/
-
-bool isAvailable();
 
 /*
 * Функция void requestHandler(char* request)
@@ -177,17 +196,6 @@ void getHandler(char* request);
 */
 
 void postHandler(char * request);
-
-/*
-* Функция void authorization()
-* Запускает режим авторизации в котором:
-*   * Ставиться страница AUTHENTICATION
-*   * Проверяется зашифрованный (Base64) запрос функцией isAvailable()
-*       Если все впорядке - ставится страница CONTROL
-*       Иначе требуем еще раз ввести логин и пароль
-*/
-
-void authorization();
 
 void setup() {
   isActivatedSession = false;
@@ -244,7 +252,7 @@ void loop() {
     if (EEPROM.read(0) == 1) {
       setPage(SETTING);
     } else  if (EEPROM.read(0) == 0) {
-      if (isAvailable()) {
+      if (isActivatedSession) {
         setPage(CONTROL);
       } else setPage(AUTHENTICATION);
     }
@@ -259,92 +267,6 @@ void setPage(Page p) {
     }
 
     case SETTING: {
-      char *post = strstr((char *) data,"ip=");
-      char* buffer;
-      char *token = strtok_r(post, "&", &buffer);// делим на токены post_pos, разделитель &
-      byte i = 1; // нумерация токенов
-      while (token != NULL) {
-        // EEPROM.write(0, 0) // при перезагрузки мы перейдем в controlPage()
-        if (i == 1) {
-          char* ip = token;
-          if (ip[3] != NULL) {
-            ip = strtok(ip, "ip=");
-            char* ip_token = strtok(ip, ".");
-            byte n = 1;
-            while (ip_token != NULL) {
-              //Функция atoi(char *) преобразует символьный массив и возвращает число
-              if (n == 1) EEPROM.write(1, atoi(ip_token)); //Serial.println((byte) atoi(ip_token));
-              if (n == 2) EEPROM.write(2, atoi(ip_token));
-              if (n == 3) EEPROM.write(3, atoi(ip_token));
-              if (n == 4) EEPROM.write(4, atoi(ip_token));
-              ip_token = strtok(NULL,".");
-              n++;
-            }
-          } else ip = 0;
-        }
-
-        if (i == 2) {
-          char* gtw = token;
-          if (gtw[4] != NULL) {
-            gtw = strtok(gtw, "gtw=");
-            char* gtw_token = strtok(gtw, ".");
-            int n = 1;
-            while (gtw_token != NULL) {
-              if (n == 1) EEPROM.write(5, atoi(gtw_token));
-              if (n == 2) EEPROM.write(6, atoi(gtw_token));
-              if (n == 3) EEPROM.write(7, atoi(gtw_token));
-              if (n == 4) EEPROM.write(8, atoi(gtw_token));
-              gtw_token = strtok(NULL,".");
-              n++;
-            }
-          } else gtw = 0;
-        }
-
-        if (i == 3) {
-          char* dns = token;
-          if (dns[4] != NULL) {
-            dns = strtok(dns, "dns=");
-            char* dns_token = strtok(dns,".");
-            int n = 1;
-            while (dns_token != NULL) {
-              if (n == 1) EEPROM.write(9, atoi(dns_token));
-              if (n == 2) EEPROM.write(10, atoi(dns_token));
-              if (n == 3) EEPROM.write(11, atoi(dns_token));
-              if (n == 4) EEPROM.write(12, atoi(dns_token));
-              dns_token = strtok(NULL,".");
-              n++;
-            }
-          } else dns = 0;
-        }
-        if (i == 4) {
-          char* subm = token;
-          if (subm[5] != NULL) {
-            subm = strtok(subm, "subm=");
-            char* subm_token = strtok(subm,".");
-            int n = 1;
-            while (subm_token != NULL) {
-              if (n == 1) EEPROM.write(13, atoi(subm_token));
-              if (n == 2) EEPROM.write(14, atoi(subm_token));
-              if (n == 3) EEPROM.write(15, atoi(subm_token));
-              if (n == 4) EEPROM.write(16, atoi(subm_token));
-              subm_token = strtok(NULL, ".");
-              n++;
-            }
-          } else subm = 0;
-        }
-        if (i == 5) {
-          char* log = token;
-          EEPROM.write(17, strtok(log, "log="));
-          Serial.println(strtok(log, "log="));
-        }
-        if (i == 6) {
-          char* pass = token;
-          EEPROM.write(18, strtok(pass, "pass="));
-          Serial.println(strtok(pass, "pass="));
-        }
-        token = strtok_r(NULL, "&" ,&buffer); // выделение следующей части строки (поиск нового токена и выделение его)
-        i++; //нужен для определения какой на данный момент номер токена
-      }
       ether.httpServerReply(resetPage());
       break;
     }
@@ -361,21 +283,136 @@ void setPage(Page p) {
   }
 }
 
+<<<<<<< HEAD
 void authorization() {
   setPage(AUTHENTICATION);
   if (isAvailable()) {
     return;
   } else setPage(AUTHENTICATION);
+=======
+void authHandler(char *log, char *pass) {
+  if (strcmp(log, deflogin) == 0 && strcmp(pass, defpassword) == 0) {
+    isActivatedSession = true;
+    setPage(CONTROL);
+  } else {
+    isActivatedSession = false;
+    setPage(AUTHENTICATION);
+  }
+>>>>>>> 93e6cb7... Login is working. Have bugs
 }
 
 void postHandler(char* request) {
+  if (strstr(request, "ip=") != NULL) {
+    char *post = strstr(request, "ip=");
+    char *buffer;
+    char *token = strtok_r(post, "&", &buffer);// делим на токены post_pos, разделитель &
+    byte i = 1; // нумерация токенов
+    while (token != NULL) {
+      // EEPROM.write(0, 0) // при перезагрузки мы перейдем в controlPage()
+      if (i == 1) {
+        char* ip = token;
+        if (ip[3] != NULL) {
+          ip = strtok(ip, "ip=");
+          char* ip_token = strtok(ip, ".");
+          byte n = 1;
+          while (ip_token != NULL) {
+            //Функция atoi(char *) преобразует символьный массив и возвращает число
+            if (n == 1) EEPROM.write(1, atoi(ip_token)); //Serial.println((byte) atoi(ip_token));
+            if (n == 2) EEPROM.write(2, atoi(ip_token));
+            if (n == 3) EEPROM.write(3, atoi(ip_token));
+            if (n == 4) EEPROM.write(4, atoi(ip_token));
+            ip_token = strtok(NULL,".");
+            n++;
+          }
+        } else ip = 0;
+      }
 
+      if (i == 2) {
+        char* gtw = token;
+        if (gtw[4] != NULL) {
+          gtw = strtok(gtw, "gtw=");
+          char* gtw_token = strtok(gtw, ".");
+          int n = 1;
+          while (gtw_token != NULL) {
+            if (n == 1) EEPROM.write(5, atoi(gtw_token));
+            if (n == 2) EEPROM.write(6, atoi(gtw_token));
+            if (n == 3) EEPROM.write(7, atoi(gtw_token));
+            if (n == 4) EEPROM.write(8, atoi(gtw_token));
+            gtw_token = strtok(NULL,".");
+            n++;
+          }
+        } else gtw = 0;
+      }
+
+      if (i == 3) {
+        char* dns = token;
+        if (dns[4] != NULL) {
+          dns = strtok(dns, "dns=");
+          char* dns_token = strtok(dns,".");
+          int n = 1;
+          while (dns_token != NULL) {
+            if (n == 1) EEPROM.write(9, atoi(dns_token));
+            if (n == 2) EEPROM.write(10, atoi(dns_token));
+            if (n == 3) EEPROM.write(11, atoi(dns_token));
+            if (n == 4) EEPROM.write(12, atoi(dns_token));
+            dns_token = strtok(NULL,".");
+            n++;
+          }
+        } else dns = 0;
+      }
+      if (i == 4) {
+        char* subm = token;
+        if (subm[5] != NULL) {
+          subm = strtok(subm, "subm=");
+          char* subm_token = strtok(subm,".");
+          int n = 1;
+          while (subm_token != NULL) {
+            if (n == 1) EEPROM.write(13, atoi(subm_token));
+            if (n == 2) EEPROM.write(14, atoi(subm_token));
+            if (n == 3) EEPROM.write(15, atoi(subm_token));
+            if (n == 4) EEPROM.write(16, atoi(subm_token));
+            subm_token = strtok(NULL, ".");
+            n++;
+          }
+        } else subm = 0;
+      }
+      token = strtok_r(NULL, "&", &buffer); // выделение следующей части строки (поиск нового токена и выделение его)
+      i++; //нужен для определения какой на данный момент номер токена
+    }
+  } if (strstr(request, "log=") != NULL) {
+      char *post = strstr(request, "log=");
+      char *buffer;
+      char *token = strtok_r(post, "&", &buffer);
+      char *login;
+      char *password;
+      byte i = 1;
+      while (token != NULL) {
+        if (i == 1) {
+          /*
+          *  Это делается для того, чтобы не трогать выделенную часть token'а
+          *   т.к в дальнейшем будем работать с токеном
+          */
+          login = token;
+          login = strtok(login, "log=");
+        }
+        if (i == 2) {
+          password = token;
+          password = strtok(password, "pass=");
+        }
+        token = strtok_r(NULL, "&", &buffer);
+        i++;
+      }
+      Serial.println(login);
+      Serial.println(password);
+      authHandler(login, password);
+    } else {
+      Serial.println("Error occured: Which post?");
+  }
 }
 
 void getHandler(char* request) {
-  Serial.println(strstr(request, "GET /?EXIT") != NULL ? "Yes" : "No");
   if (strstr(request, "GET /?EXIT") != NULL) {
-    authorization();
+    setPage(AUTHENTICATION);
   }
 }
 
@@ -389,6 +426,7 @@ void requestHandler(char* request) {
   if (strstr(request, "GET /") != NULL) {
     getHandler(request);
   } else if (strstr(request, "POST /") != NULL) {
+    Serial.println("POST");
     postHandler(request);
   } else {
     setPage(UNKNOWN);
@@ -399,6 +437,7 @@ void requestHandler(char* request) {
 * TODO Проблема в сохранении сессии
 */
 
+<<<<<<< HEAD
 bool isAvailable() {
   Serial.println(data);
   char* temp = authlog.c_str();
@@ -407,6 +446,28 @@ bool isAvailable() {
   } else {
     return false;
   }
+=======
+static word loginPage() {
+  bfill = ether.tcpOffset();
+  bfill.emit_p(PSTR(
+    "<title> Login </title>"
+    "</head>"
+    "<body>"
+    "<body text = #505452 bgcolor = '#f2f2f2'>"
+    "<h2 align = 'center'> Access to setup </h2>"
+    "<hr>"
+    "<center>"
+    "<p> <em> Login </em>"
+    "<form method = 'post'>"
+    "<input type = 'text' name = 'log' size = 20>"
+    "<p> <em> Password </em> </p>"
+    "<input type = 'text' name = 'pass' size = 20>"
+    "<p> <input type = 'submit' value = 'Submit'> </p>"
+    "</form>"
+    "</center>"
+  ));
+  return bfill.position();
+>>>>>>> 93e6cb7... Login is working. Have bugs
 }
 
 static word httpNotFound() {
