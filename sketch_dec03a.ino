@@ -1,5 +1,5 @@
 /*
-  *  1) EEPRROM загрузка и выгрузка
+  *  1) EEPROM загрузка и выгрузка
   *  Статус датчиков (пока их 2)
   *  Статус реле (света???)
   *  Включение | выключие реле
@@ -145,6 +145,17 @@ static word httpUnauthorized();
 *************************** Функции ******************************
 */
 
+byte loadFromEEPROM(int pos);
+
+/*
+* Функция void loadToEEPROM(int pos, byte whatToSend)
+* int post - позиция ячейки памяти, в которую производится загрузка
+* whatToSend - собственно, что отправить
+* Нужен для упрощения написания вызова функции EEPROM.write
+*/
+
+void loadToEEPROM(int pos, byte whatToSend);
+
 /*
 * Функция void authHandler(char *log, char *pass)
 * Сравнивает login и password с дефолтными login и password
@@ -193,7 +204,7 @@ void postHandler(char * request);
 
 void setup() {
   isActivatedSession = false;
-  EEPROM.write(0,0);
+  EEPROM.write(0,1);
   pinMode(SENSOR_1_PIN, INPUT); // Подключение датчка D1 на вход.
   pinMode(SENSOR_2_PIN, INPUT); // Подключение датчка D1 на вход.
   pinMode(RELE_PIN, OUTPUT); // Подключение светодиода S3 на выход.
@@ -212,6 +223,52 @@ void setup() {
   ether.printIp("Netmask: ", ether.netmask);
   ether.printIp("GW Ip:" ,ether.gwip);
   ether.printIp("DNS Ip:", ether.dnsip);
+
+  Serial.println("----------LOAD_FROM_EEPROM------------");
+  Serial.print("ip = ");
+  Serial.print((byte) loadFromEEPROM(1));
+  Serial.print(".");
+  Serial.print((byte) loadFromEEPROM(2));
+  Serial.print(".");
+  Serial.print((byte) loadFromEEPROM(3));
+  Serial.print(".");
+  Serial.print((byte) loadFromEEPROM(4));
+  Serial.println("");
+  Serial.print("gtw = ");
+  Serial.print((byte) loadFromEEPROM(5));
+  Serial.print(".");
+  Serial.print((byte) loadFromEEPROM(6));
+  Serial.print(".");
+  Serial.print((byte) loadFromEEPROM(7));
+  Serial.print(".");
+  Serial.print((byte) loadFromEEPROM(8));
+  Serial.println("");
+  Serial.print("dns = ");
+  Serial.print((byte) loadFromEEPROM(9));
+  Serial.print(".");
+  Serial.print((byte) loadFromEEPROM(10));
+  Serial.print(".");
+  Serial.print((byte) loadFromEEPROM(11));
+  Serial.print(".");
+  Serial.print((byte) loadFromEEPROM(12));
+  Serial.println("");
+  Serial.print("net = ");
+  Serial.print((byte) loadFromEEPROM(13));
+  Serial.print(".");
+  Serial.print((byte) loadFromEEPROM(14));
+  Serial.print(".");
+  Serial.print((byte) loadFromEEPROM(15));
+  Serial.print(".");
+  Serial.print((byte) loadFromEEPROM(16));
+  Serial.println("");
+  Serial.print("login = ");
+  Serial.print((byte) loadFromEEPROM(17));
+  Serial.println("");
+  Serial.print("password = ");
+  Serial.print((byte) loadFromEEPROM(18));
+  Serial.println("");
+  Serial.println("--------------------------------------");
+
 }
 
 void loop() {
@@ -251,6 +308,14 @@ void loop() {
       } else setPage(AUTHENTICATION);
     }
   }
+}
+
+byte loadFromEEPROM(int pos) {
+  return EEPROM.read(pos);
+}
+
+void loadToEEPROM(int pos, byte whatToSend) {
+  EEPROM.write(pos, whatToSend);
 }
 
 void setPage(Page p) {
@@ -294,7 +359,6 @@ void postHandler(char* request) {
     char *token = strtok_r(post, "&", &buffer);// делим на токены post_pos, разделитель &
     byte i = 1; // нумерация токенов
     while (token != NULL) {
-      // EEPROM.write(0, 0) // при перезагрузки мы перейдем в controlPage()
       if (i == 1) {
         char* ip = token;
         if (ip[3] != NULL) {
@@ -302,11 +366,11 @@ void postHandler(char* request) {
           char* ip_token = strtok(ip, ".");
           byte n = 1;
           while (ip_token != NULL) {
-            //Функция atoi(char *) преобразует символьный массив и возвращает число
-            if (n == 1) EEPROM.write(1, atoi(ip_token)); //Serial.println((byte) atoi(ip_token));
-            if (n == 2) EEPROM.write(2, atoi(ip_token));
-            if (n == 3) EEPROM.write(3, atoi(ip_token));
-            if (n == 4) EEPROM.write(4, atoi(ip_token));
+            //Функция atoi(char * foo) преобразует символьный массив и возвращает число
+            if (n == 1) loadToEEPROM(1, (byte) atoi (ip_token));
+            if (n == 2) loadToEEPROM(2, (byte) atoi(ip_token));
+            if (n == 3) loadToEEPROM(3, (byte) atoi(ip_token));
+            if (n == 4) loadToEEPROM(4, (byte) atoi(ip_token));
             ip_token = strtok(NULL,".");
             n++;
           }
@@ -320,10 +384,10 @@ void postHandler(char* request) {
           char* gtw_token = strtok(gtw, ".");
           int n = 1;
           while (gtw_token != NULL) {
-            if (n == 1) EEPROM.write(5, atoi(gtw_token));
-            if (n == 2) EEPROM.write(6, atoi(gtw_token));
-            if (n == 3) EEPROM.write(7, atoi(gtw_token));
-            if (n == 4) EEPROM.write(8, atoi(gtw_token));
+            if (n == 1) loadToEEPROM(5, (byte) atoi(gtw_token));
+            if (n == 2) loadToEEPROM(6, (byte) atoi(gtw_token));
+            if (n == 3) loadToEEPROM(7, (byte) atoi(gtw_token));
+            if (n == 4) loadToEEPROM(8, (byte) atoi(gtw_token));
             gtw_token = strtok(NULL,".");
             n++;
           }
@@ -337,10 +401,10 @@ void postHandler(char* request) {
           char* dns_token = strtok(dns,".");
           int n = 1;
           while (dns_token != NULL) {
-            if (n == 1) EEPROM.write(9, atoi(dns_token));
-            if (n == 2) EEPROM.write(10, atoi(dns_token));
-            if (n == 3) EEPROM.write(11, atoi(dns_token));
-            if (n == 4) EEPROM.write(12, atoi(dns_token));
+            if (n == 1) loadToEEPROM(9, (byte) atoi(dns_token));
+            if (n == 2) loadToEEPROM(10, (byte) atoi(dns_token));
+            if (n == 3) loadToEEPROM(11, (byte) atoi(dns_token));
+            if (n == 4) loadToEEPROM(12, (byte) atoi(dns_token));
             dns_token = strtok(NULL,".");
             n++;
           }
@@ -353,20 +417,30 @@ void postHandler(char* request) {
           char* subm_token = strtok(subm,".");
           int n = 1;
           while (subm_token != NULL) {
-            if (n == 1) EEPROM.write(13, atoi(subm_token));
-            if (n == 2) EEPROM.write(14, atoi(subm_token));
-            if (n == 3) EEPROM.write(15, atoi(subm_token));
-            if (n == 4) EEPROM.write(16, atoi(subm_token));
+            if (n == 1) loadToEEPROM(13, (byte) atoi(subm_token));
+            if (n == 2) loadToEEPROM(14, (byte) atoi(subm_token));
+            if (n == 3) loadToEEPROM(15, (byte) atoi(subm_token));
+            if (n == 4) loadToEEPROM(16, (byte) atoi(subm_token));
             subm_token = strtok(NULL, ".");
             n++;
           }
         } else subm = 0;
       }
+      if (i == 5) {
+        char *login = token;
+        login = strtok(login, "log=");
+        loadToEEPROM(17, (byte) atoi(login));
+      }
+      if (i == 6) {
+        char *password = token;
+        password = strtok(password, "pass=");
+        loadToEEPROM(18, (byte) atoi(password));
+      }
       token = strtok_r(NULL, "&", &buffer); // выделение следующей части строки (поиск нового токена и выделение его)
       i++; //нужен для определения какой на данный момент номер токена
     }
-  } if (strstr(request, "log=") != NULL) {
-      char *post = strstr(request, "log=");
+  } if (strstr(request, "login=") != NULL) {
+      char *post = strstr(request, "login=");
       char *buffer;
       char *token = strtok_r(post, "&", &buffer);
       char *login;
@@ -379,11 +453,11 @@ void postHandler(char* request) {
           *   т.к в дальнейшем будем работать с токеном
           */
           login = token;
-          login = strtok(login, "log=");
+          login = strtok(login, "login=");
         }
         if (i == 2) {
           password = token;
-          password = strtok(password, "pass=");
+          password = strtok(password, "password=");
         }
         token = strtok_r(NULL, "&", &buffer);
         i++;
@@ -392,7 +466,7 @@ void postHandler(char* request) {
       Serial.println(password);
       authHandler(login, password);
     } else {
-      Serial.println("Error occured: Which post?");
+      //Serial.println("Error occured: Which post?");
   }
 }
 
@@ -412,7 +486,7 @@ void requestHandler(char* request) {
   if (strstr(request, "GET /") != NULL) {
     getHandler(request);
   } else if (strstr(request, "POST /") != NULL) {
-    Serial.println("POST");
+    //Serial.println("POST");
     postHandler(request);
   } else {
     setPage(UNKNOWN);
@@ -435,9 +509,9 @@ static word loginPage() {
     "<center>"
     "<p> <em> Login </em>"
     "<form method = 'post'>"
-    "<input type = 'text' name = 'log' size = 20>"
+    "<input type = 'text' name = 'login' size = 20>"
     "<p> <em> Password </em> </p>"
-    "<input type = 'text' name = 'pass' size = 20>"
+    "<input type = 'text' name = 'password' size = 20>"
     "<p> <input type = 'submit' value = 'Submit'> </p>"
     "</form>"
     "</center>"
