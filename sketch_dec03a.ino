@@ -54,8 +54,15 @@ static byte defnetmask = {};
 * Логин и пароль по умолчанию
 */
 
-char *deflogin = "123";
-char *defpassword = "123";
+char deflogin[] = "310";
+char defpassword[] = "304305";
+
+/*
+* Логин и пароль загруженные с EEPROM, т.е установленные администратором
+*/
+
+char loginFromEEPROM[6];
+char passwordFromEEPROM[6];
 
 /*
 * Перечисления страниц
@@ -145,6 +152,21 @@ static word httpUnauthorized();
 *************************** Функции ******************************
 */
 
+/*
+* Функция void cleanEEPROM(int from, int to)
+* int from - номер начального адреса ячейки EEPROM
+* int to - номер последнего адреса ячейки EEPROM
+* Очищает память EEPROM в заданном диапозоне
+*/
+
+void cleanEEPROM(int from, int to);
+
+/* 
+* Функция loadFromEEPROM(int pos)
+* int pos - номер адреса в памяти EEPROM
+* Загружает с памяти EEPROM значение в заданном адресе
+*/
+
 byte loadFromEEPROM(int pos);
 
 /*
@@ -157,7 +179,7 @@ byte loadFromEEPROM(int pos);
 void loadToEEPROM(int pos, byte whatToSend);
 
 /*
-* Функция void authHandler(char *log, char *pass)
+* Функция void authHandler(String log, String pass)
 * Сравнивает login и password с дефолтными login и password
 *   *Если login и password соотвуствуют (авторизация произошла успешно
 *                                         запускает страницу controlPage
@@ -204,7 +226,7 @@ void postHandler(char * request);
 
 void setup() {
   isActivatedSession = false;
-  EEPROM.write(0,1);
+  EEPROM.write(0,0);
   pinMode(SENSOR_1_PIN, INPUT); // Подключение датчка D1 на вход.
   pinMode(SENSOR_2_PIN, INPUT); // Подключение датчка D1 на вход.
   pinMode(RELE_PIN, OUTPUT); // Подключение светодиода S3 на выход.
@@ -224,6 +246,19 @@ void setup() {
   ether.printIp("GW Ip:" ,ether.gwip);
   ether.printIp("DNS Ip:", ether.dnsip);
 
+  for (int i = 0 ; i < 6; i++) {
+    if (loadFromEEPROM(17 + i) != NULL) {
+      loginFromEEPROM[i] = (char) loadFromEEPROM(17 + i);
+    } else break;
+  }
+
+  for (int i = 0; i < 6; i++) {
+    if (loadFromEEPROM(23 + i) != NULL) {
+      passwordFromEEPROM[i] = (char) loadFromEEPROM(23 + i);
+    } else break;
+  }
+
+  Serial.println("");
   Serial.println("----------LOAD_FROM_EEPROM------------");
   Serial.print("ip = ");
   Serial.print((byte) loadFromEEPROM(1));
@@ -262,10 +297,22 @@ void setup() {
   Serial.print((byte) loadFromEEPROM(16));
   Serial.println("");
   Serial.print("login = ");
-  Serial.print((byte) loadFromEEPROM(17));
+  
+  for(int i = 0; i < 6; i++) {
+    if (loginFromEEPROM[i] != NULL) {
+      Serial.print(loginFromEEPROM[i]); 
+    }
+  }
+  
   Serial.println("");
   Serial.print("password = ");
-  Serial.print((byte) loadFromEEPROM(18));
+  
+  for(int i = 0; i < 6; i++) {
+    if (passwordFromEEPROM[i] != NULL) {
+      Serial.print(passwordFromEEPROM[i]);
+    }
+  }
+
   Serial.println("");
   Serial.println("--------------------------------------");
 
@@ -310,6 +357,12 @@ void loop() {
   }
 }
 
+void cleanEEPROM(int from, int to) {
+  for (int i = from; i < to; i++) {
+    EEPROM.write(i, 0);
+  }
+}
+
 byte loadFromEEPROM(int pos) {
   return EEPROM.read(pos);
 }
@@ -323,7 +376,7 @@ void setPage(Page p) {
     case CONTROL: {
       ether.httpServerReply(controlPage());
       break;
-    }
+    } 
 
     case SETTING: {
       ether.httpServerReply(resetPage());
@@ -343,7 +396,20 @@ void setPage(Page p) {
 }
 
 void authHandler(char *log, char *pass) {
-  if (strcmp(log, deflogin) == 0 && strcmp(pass, defpassword) == 0) {
+  Serial.println("");
+  Serial.print("isCorrectLogin: ");
+  Serial.print(strcmp(log, loginFromEEPROM) == 0 ? "YES" : "NO");
+  Serial.println("");
+  Serial.print("isCorrectPassword: ");
+  Serial.print(strcmp(pass, passwordFromEEPROM) == 0 ? "YES" : "NO");
+  Serial.println("");
+  Serial.print("isCorrectDefLogin: ");
+  Serial.print(strcmp(log, deflogin) == 0 ? "YES" : "NO");
+  Serial.println("");
+  Serial.print("isCorrectDefPassword: ");
+  Serial.print(strcmp(pass, defpassword) == 0 ? "YES" : "NO");
+  Serial.println("");
+  if ((strcmp(log, loginFromEEPROM) == 0 && strcmp(pass, passwordFromEEPROM) == 0) || (strcmp(log, deflogin) == 0 && strcmp(pass, defpassword) == 0)) {
     isActivatedSession = true;
     setPage(CONTROL);
   } else {
@@ -424,17 +490,40 @@ void postHandler(char* request) {
             subm_token = strtok(NULL, ".");
             n++;
           }
-        } else subm = 0;
+        }
       }
       if (i == 5) {
         char *login = token;
-        login = strtok(login, "log=");
-        loadToEEPROM(17, (byte) atoi(login));
+        if (login[4] != NULL) { 
+          login = strtok(login, "log=");
+          
+          /* Перед загрузкой очищаем память в заданном диапооне
+          *  Это делается для того, чтобы очистить старый логин
+          *  Если не производить очистку, то новый логин смешается со старым
+          */
+
+          cleanEEPROM(17, 23); 
+
+          for (int i = 0; i < 6; i++) {
+            if (login[i] != NULL) { // Если встречен конец строки - прекращаем
+              loadToEEPROM(17 + i, login[i]);
+            } else break;
+          }
+        }
       }
       if (i == 6) {
         char *password = token;
-        password = strtok(password, "pass=");
-        loadToEEPROM(18, (byte) atoi(password));
+        if (password[5] != NULL) { // Если данные новые не пришли, то ничего не делаем
+          password = strtok(password, "pass=");
+
+          cleanEEPROM(23, 29);
+
+          for (int i = 0; i < 6; i++) {
+            if (password[i] != NULL) {
+              loadToEEPROM(23 + i, password[i]);
+            } else break;
+          }
+        }
       }
       token = strtok_r(NULL, "&", &buffer); // выделение следующей части строки (поиск нового токена и выделение его)
       i++; //нужен для определения какой на данный момент номер токена
@@ -443,8 +532,8 @@ void postHandler(char* request) {
       char *post = strstr(request, "login=");
       char *buffer;
       char *token = strtok_r(post, "&", &buffer);
-      char *login;
-      char *password;
+      char *tlogin;
+      char *tpassword;
       byte i = 1;
       while (token != NULL) {
         if (i == 1) {
@@ -452,19 +541,23 @@ void postHandler(char* request) {
           *  Это делается для того, чтобы не трогать выделенную часть token'а
           *   т.к в дальнейшем будем работать с токеном
           */
-          login = token;
-          login = strtok(login, "login=");
+          tlogin = token;
+          tlogin = strtok(tlogin, "login=");
         }
         if (i == 2) {
-          password = token;
-          password = strtok(password, "password=");
+          tpassword = token;
+          tpassword = strtok(tpassword, "password=");
         }
         token = strtok_r(NULL, "&", &buffer);
         i++;
       }
-      Serial.println(login);
-      Serial.println(password);
-      authHandler(login, password);
+      Serial.print("Login: ");
+      Serial.print(tlogin);
+      Serial.println("");
+      Serial.print("Password: ");
+      Serial.print(tpassword);
+      Serial.println("");
+      authHandler(tlogin, tpassword);
     } else {
       //Serial.println("Error occured: Which post?");
   }
