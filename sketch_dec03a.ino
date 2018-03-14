@@ -38,6 +38,13 @@
 //TODO Выбрать номер пина
 #define RELE_PIN 0
 
+/*
+* Максимальная длина логина и пароля
+*/
+
+#define MAX_PASSWORD_LENGTH 6
+#define MAX_LOGIN_LENGTH 6
+
 static byte mymac[] = {0x74,0x69,0x69,0x2D,0x30,0x32};
 static byte myip[] = {EEPROM.read(1),EEPROM.read(2),EEPROM.read(3),EEPROM.read(4)};
 static byte defip[] = {192,168,0,13};
