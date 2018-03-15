@@ -354,6 +354,7 @@ void loop() {
   if(pos) {
     data = (char *) Ethernet::buffer + pos;
     requestHandler(data);
+    //Serial.println(data);
     if (EEPROM.read(0) == 1) {
       setPage(SETTING);
     } else  if (EEPROM.read(0) == 0) {
@@ -396,13 +397,15 @@ void setPage(Page p) {
     }
 
     case AUTHENTICATION: {
-      ether.httpServerReply(loginPage());
+      ether.httpServerReply(httpUnauthorized());
       break;
     }
   }
 }
 
 void authHandler(char *log, char *pass) {
+  
+  /*
   Serial.println("");
   Serial.print("isCorrectLogin: ");
   Serial.print(strcmp(log, loginFromEEPROM) == 0 ? "YES" : "NO");
@@ -416,6 +419,10 @@ void authHandler(char *log, char *pass) {
   Serial.print("isCorrectDefPassword: ");
   Serial.print(strcmp(pass, defpassword) == 0 ? "YES" : "NO");
   Serial.println("");
+  */
+
+
+
   if ((strcmp(log, loginFromEEPROM) == 0 && strcmp(pass, passwordFromEEPROM) == 0) || (strcmp(log, deflogin) == 0 && strcmp(pass, defpassword) == 0)) {
     isActivatedSession = true;
     setPage(CONTROL);
@@ -535,37 +542,7 @@ void postHandler(char* request) {
       token = strtok_r(NULL, "&", &buffer); // выделение следующей части строки (поиск нового токена и выделение его)
       i++; //нужен для определения какой на данный момент номер токена
     }
-  } if (strstr(request, "login=") != NULL) {
-      char *post = strstr(request, "login=");
-      char *buffer;
-      char *token = strtok_r(post, "&", &buffer);
-      char *tlogin;
-      char *tpassword;
-      byte i = 1;
-      while (token != NULL) {
-        if (i == 1) {
-          /*
-          *  Это делается для того, чтобы не трогать выделенную часть token'а
-          *   т.к в дальнейшем будем работать с токеном
-          */
-          tlogin = token;
-          tlogin = strtok(tlogin, "login=");
-        }
-        if (i == 2) {
-          tpassword = token;
-          tpassword = strtok(tpassword, "password=");
-        }
-        token = strtok_r(NULL, "&", &buffer);
-        i++;
-      }
-      Serial.print("Login: ");
-      Serial.print(tlogin);
-      Serial.println("");
-      Serial.print("Password: ");
-      Serial.print(tpassword);
-      Serial.println("");
-      authHandler(tlogin, tpassword);
-    } else {
+  } else {
       //Serial.println("Error occured: Which post?");
   }
 }
@@ -573,6 +550,14 @@ void postHandler(char* request) {
 void getHandler(char* request) {
   if (strstr(request, "GET /?EXIT") != NULL) {
     setPage(AUTHENTICATION);
+  }
+  if (strstr(request, "Authorization: Basic")) {
+    char *auth = strstr(request,"Authorization: Basic");
+    String authS(auth, auth + 1);
+    Serial.println("-----------------");
+    Serial.println("Get Authorization");
+    Serial.println(authS);
+    Serial.println("-----------------\n");
   }
 }
 
