@@ -253,13 +253,13 @@ void setup() {
   ether.printIp("GW Ip:" ,ether.gwip);
   ether.printIp("DNS Ip:", ether.dnsip);
 
-  for (int i = 0 ; i < 6; i++) {
+  for (int i = 0 ; i < MAX_LOGIN_LENGTH; i++) {
     if (loadFromEEPROM(17 + i) != NULL) {
       loginFromEEPROM[i] = (char) loadFromEEPROM(17 + i);
     } else break;
   }
 
-  for (int i = 0; i < 6; i++) {
+  for (int i = 0; i < MAX_PASSWORD_LENGTH; i++) {
     if (loadFromEEPROM(23 + i) != NULL) {
       passwordFromEEPROM[i] = (char) loadFromEEPROM(23 + i);
     } else break;
