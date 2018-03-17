@@ -11,9 +11,9 @@
   *  Добавить Netmask
 */
 
+#include <Base64.h>
 #include "EtherCard.h"
 #include "EEPROM.h"
-#include <rBase64.h>
 
 /*
 * Пины для датчиков движения
@@ -64,6 +64,8 @@ static byte defnetmask = {};
 char deflogin[] = "310";
 char defpassword[] = "304305";
 
+String authHash;
+
 /*
 * Логин и пароль загруженные с EEPROM, т.е установленные администратором
 */
@@ -79,7 +81,8 @@ enum Page {
   CONTROL,
   UNKNOWN,
   SETTING,
-  AUTHENTICATION
+  AUTHENTICATION,
+  TEST
 };
 
 /*
@@ -118,6 +121,8 @@ bool isActivatedSession;
 /*
 *************************** HTML страницы ******************************
 */
+
+static word httpTest();
 
 /*
 * Функция static word loginPage()
@@ -160,6 +165,14 @@ static word httpUnauthorized();
 */
 
 /*
+* Функция encodeBase64(char *text)
+* char *text - текст, который нужно закодировать
+* Возвращает закодированную в Base64 строку String без учитывания символа \0
+*/
+
+String encodeBase64(String text);
+
+/*
 * Функция void cleanEEPROM(int from, int to)
 * int from - номер начального адреса ячейки EEPROM
 * int to - номер последнего адреса ячейки EEPROM
@@ -192,7 +205,7 @@ void loadToEEPROM(int pos, byte whatToSend);
 *                                         запускает страницу controlPage
 */
 
-void authHandler(char *log, char *pass);
+void authHandler(char *request);
 
 /*
 * Функция void setPage(Page p)
@@ -240,7 +253,7 @@ void setup() {
   Serial.begin(9600);
   if(ether.begin(sizeof Ethernet::buffer,mymac,10) == 0) {
     Serial.println("Failed to access Ethernet controller");
-  } else Serial.println("Ethernet controller is ok");
+  } else //Serial.println("Ethernet controller is ok");
   if(EEPROM.read(0) == 1) {
     ether.staticSetup(defip);
   } else if (EEPROM.read(0) == 0) {
@@ -248,10 +261,6 @@ void setup() {
   } else Serial.println("Error with EEPROM");
 
   if(!ether.dhcpSetup()) Serial.println("DHCP Failed"); //Установка сетевых параметров по DHCP
-  ether.printIp("Ip: ", ether.myip);
-  ether.printIp("Netmask: ", ether.netmask);
-  ether.printIp("GW Ip:" ,ether.gwip);
-  ether.printIp("DNS Ip:", ether.dnsip);
 
   for (int i = 0 ; i < MAX_LOGIN_LENGTH; i++) {
     if (loadFromEEPROM(17 + i) != NULL) {
@@ -265,8 +274,14 @@ void setup() {
     } else break;
   }
 
+  authHash += loginFromEEPROM;
+  authHash += ":";
+  authHash += passwordFromEEPROM;
+  String temp = encodeBase64(authHash); 
+  authHash = temp;
+
   Serial.println("");
-  Serial.println("----------LOAD_FROM_EEPROM------------");
+  Serial.println(F("----------LOAD_FROM_EEPROM------------"));
   Serial.print("ip = ");
   Serial.print((byte) loadFromEEPROM(1));
   Serial.print(".");
@@ -321,7 +336,17 @@ void setup() {
   }
 
   Serial.println("");
-  Serial.println("--------------------------------------");
+  Serial.println(F("--------------------------------------"));
+  Serial.println("");
+  Serial.println(F("----------------CONFIG----------------"));
+  ether.printIp("Ip: ", ether.myip);
+  ether.printIp("Netmask: ", ether.netmask);
+  ether.printIp("GW Ip:" ,ether.gwip);
+  ether.printIp("DNS Ip:", ether.dnsip);
+  Serial.print(F("Authorization hash: "));
+  Serial.print(authHash);
+  Serial.println("");
+  Serial.println(F("--------------------------------------"));
 
 }
 
@@ -353,8 +378,8 @@ void loop() {
   // Если пришел запрос - начинаем обрабатывать его
   if(pos) {
     data = (char *) Ethernet::buffer + pos;
+    Serial.println(data);
     requestHandler(data);
-    //Serial.println(data);
     if (EEPROM.read(0) == 1) {
       setPage(SETTING);
     } else  if (EEPROM.read(0) == 0) {
@@ -363,6 +388,15 @@ void loop() {
       } else setPage(AUTHENTICATION);
     }
   }
+}
+
+String encodeBase64(String text) {
+  char temp[text.length()];
+  strcpy(temp, text.c_str());
+  int encodedLength = Base64.encodedLength(sizeof(temp));
+  char encodedString[encodedLength];
+  Base64.encode(encodedString, temp, sizeof(temp));
+  return String(encodedString);
 }
 
 void cleanEEPROM(int from, int to) {
@@ -400,36 +434,16 @@ void setPage(Page p) {
       ether.httpServerReply(httpUnauthorized());
       break;
     }
+    case TEST: {
+      ether.httpServerReply(httpTest());
+    }
   }
 }
 
-void authHandler(char *log, char *pass) {
-  
-  /*
-  Serial.println("");
-  Serial.print("isCorrectLogin: ");
-  Serial.print(strcmp(log, loginFromEEPROM) == 0 ? "YES" : "NO");
-  Serial.println("");
-  Serial.print("isCorrectPassword: ");
-  Serial.print(strcmp(pass, passwordFromEEPROM) == 0 ? "YES" : "NO");
-  Serial.println("");
-  Serial.print("isCorrectDefLogin: ");
-  Serial.print(strcmp(log, deflogin) == 0 ? "YES" : "NO");
-  Serial.println("");
-  Serial.print("isCorrectDefPassword: ");
-  Serial.print(strcmp(pass, defpassword) == 0 ? "YES" : "NO");
-  Serial.println("");
-  */
-
-
-
-  if ((strcmp(log, loginFromEEPROM) == 0 && strcmp(pass, passwordFromEEPROM) == 0) || (strcmp(log, deflogin) == 0 && strcmp(pass, defpassword) == 0)) {
-    isActivatedSession = true;
+void authHandler(char *request) {
+  if (strstr(request, authHash.c_str()) != NULL) {
     setPage(CONTROL);
-  } else {
-    isActivatedSession = false;
-    setPage(AUTHENTICATION);
-  }
+  } else setPage(AUTHENTICATION);
 }
 
 void postHandler(char* request) {
@@ -542,22 +556,14 @@ void postHandler(char* request) {
       token = strtok_r(NULL, "&", &buffer); // выделение следующей части строки (поиск нового токена и выделение его)
       i++; //нужен для определения какой на данный момент номер токена
     }
-  } else {
-      //Serial.println("Error occured: Which post?");
+  } if (strstr(request, "settings=SETTINGS") != NULL) {
+    setPage(SETTING);
   }
 }
 
 void getHandler(char* request) {
-  if (strstr(request, "GET /?EXIT") != NULL) {
-    setPage(AUTHENTICATION);
-  }
-  if (strstr(request, "Authorization: Basic")) {
-    char *auth = strstr(request,"Authorization: Basic");
-    String authS(auth, auth + 1);
-    Serial.println("-----------------");
-    Serial.println("Get Authorization");
-    Serial.println(authS);
-    Serial.println("-----------------\n");
+  if (strstr(request, "Authorization") != NULL) {
+    authHandler(request);
   }
 }
 
@@ -571,37 +577,10 @@ void requestHandler(char* request) {
   if (strstr(request, "GET /") != NULL) {
     getHandler(request);
   } else if (strstr(request, "POST /") != NULL) {
-    //Serial.println("POST");
     postHandler(request);
   } else {
     setPage(UNKNOWN);
   }
-}
-
-/*
-* TODO Проблема в сохранении сессии
-*/
-
-static word loginPage() {
-  bfill = ether.tcpOffset();
-  bfill.emit_p(PSTR(
-    "<title> Login </title>"
-    "</head>"
-    "<body>"
-    "<body text = #505452 bgcolor = '#f2f2f2'>"
-    "<h2 align = 'center'> Access to setup </h2>"
-    "<hr>"
-    "<center>"
-    "<p> <em> Login </em>"
-    "<form method = 'post'>"
-    "<input type = 'text' name = 'login' size = 20>"
-    "<p> <em> Password </em> </p>"
-    "<input type = 'text' name = 'password' size = 20>"
-    "<p> <input type = 'submit' value = 'Submit'> </p>"
-    "</form>"
-    "</center>"
-  ));
-  return bfill.position();
 }
 
 static word httpNotFound() {
@@ -609,6 +588,19 @@ static word httpNotFound() {
   bfill.emit_p(PSTR(
     "HTTP/1.0 404 Not Found"
   ));
+  return bfill.position();
+}
+
+static word httpTest() {
+  bfill = ether.tcpOffset();
+  bfill.emit_p(PSTR(
+    "HTTP/1.0 200 OK\r\n"
+    "Content-Type: text/html\r\n"
+    "Pragma: no-cache\r\n"
+    "\r\n"
+    "<title> Test </title>"
+    "<a href = '?test=test'> TEST </a>"
+    ));
   return bfill.position();
 }
 
@@ -621,6 +613,7 @@ static word resetPage() {
     "\r\n"
     "<title> Reset Page </title>"
     "<body text = '#505452' bgcolor = '#f2f2f2'>"
+    "</body>"
     "<h2 align = 'center'> Setup Ethernet Arduino </h2>"
     "<hr>"
     "<p align = 'right'>by Savinov (KS-234) ver 1.0.2018</p>"
@@ -651,7 +644,7 @@ static word httpUnauthorized() {
   bfill = ether.tcpOffset();
   bfill.emit_p(PSTR(
     "HTTP/1.0 401 Unauthorized\r\n"
-    "WWW-Authenticate: Basic realm=\"Access\""
+    "WWW-Authenticate: Basic realm=\"Arduino\""
     "Content-Type: text/html\r\n\r\n"));
   return bfill.position();
 }
@@ -670,9 +663,11 @@ bfill = ether.tcpOffset();
     "<p align = 'right'>by Savinov (KS-234) ver 1.0.2018</p>"
     "<center>"
     "<p> ledStatus:</p>"
-    "<a href=\"?EXIT\">EXIT</a><br />"
+    "<form method='post'>"
+    "<input type = 'submit' value = 'SETTINGS' name='settings'>"
+    "</form>"
+    "<p> <a href='http://log:out@192.168.1.118/'> EXIT </p>"
     "</center>"
-
   ));
   return bfill.position();
 }
