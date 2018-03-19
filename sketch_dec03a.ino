@@ -53,9 +53,9 @@ static byte defip[] = {192,168,0,13};
 * Настройки по умолчанию сетевых настроек
 */
 
-static byte defgtw[] = {};
-static byte defdns[] = {};
-static byte defnetmask = {};
+//static byte defgtw[] = {};
+//static byte defdns[] = {};
+//static byte defnetmask = {};
 
 /*
 * Логин и пароль по умолчанию
@@ -447,6 +447,7 @@ void authHandler(char *request) {
 }
 
 void postHandler(char* request) {
+  Serial.println(request);
   if (strstr(request, "ip=") != NULL) {
     char *post = strstr(request, "ip=");
     char *buffer;
@@ -559,6 +560,9 @@ void postHandler(char* request) {
   } if (strstr(request, "settings=SETTINGS") != NULL) {
     setPage(SETTING);
   }
+  if (strstr(request, "Authorization") != NULL) {
+    authHandler(request);
+  }
 }
 
 void getHandler(char* request) {
@@ -599,6 +603,12 @@ static word httpTest() {
     "Pragma: no-cache\r\n"
     "\r\n"
     "<title> Test </title>"
+    "<form method = 'post'>"
+    "<p> <input type = 'text' name = 'text' size = 20></p>"
+    "<p> <input type = 'submit' value = 'submit'>  </p>"
+    "</form>"
+    "<form method = 'get'>"
+    "</form>"
     "<a href = '?test=test'> TEST </a>"
     ));
   return bfill.position();
@@ -607,7 +617,7 @@ static word httpTest() {
 static word resetPage() {
   bfill = ether.tcpOffset();
   bfill.emit_p(PSTR(
-    "HTTP/1.0 200 OK\r\n"
+    "HTTP/1.0 202 Accepted\r\n"
     "Content-Type: text/html\r\n"
     "Pragma: no-cache\r\n"
     "\r\n"
@@ -652,7 +662,7 @@ static word httpUnauthorized() {
 static word controlPage() {
 bfill = ether.tcpOffset();
   bfill.emit_p(PSTR(
-  "HTTP/1.0 200 OK\r\n"
+    "HTTP/1.0 200 OK\r\n"
     "Content-Type: text/html\r\n"
     "Pragma: no-cache\r\n"
     "\r\n"
