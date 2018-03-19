@@ -47,7 +47,11 @@
 
 static byte mymac[] = {0x74,0x69,0x69,0x2D,0x30,0x32};
 static byte myip[] = {EEPROM.read(1),EEPROM.read(2),EEPROM.read(3),EEPROM.read(4)};
-static byte defip[] = {192,168,0,13};
+String IP; // Нужен для дальнейшего преобразования
+uint8_t dhcpIp[4];
+uint8_t dhcpNet[] = {255, 255, 255, 0};
+uint8_t dhcpGw[] = {192, 168, 1, 1};
+uint8_t dhcpDNS[] = {192, 168, 1, 1};
 
 /*
 * Настройки по умолчанию сетевых настроек
@@ -245,6 +249,7 @@ void getHandler(char* request);
 void postHandler(char * request);
 
 void setup() {
+
   isActivatedSession = false;
   EEPROM.write(0,0);
   pinMode(SENSOR_1_PIN, INPUT); // Подключение датчка D1 на вход.
@@ -254,13 +259,33 @@ void setup() {
   if(ether.begin(sizeof Ethernet::buffer,mymac,10) == 0) {
     Serial.println("Failed to access Ethernet controller");
   } else //Serial.println("Ethernet controller is ok");
-  if(EEPROM.read(0) == 1) {
+  
+  /*if(EEPROM.read(0) == 1) {
     ether.staticSetup(defip);
   } else if (EEPROM.read(0) == 0) {
     ether.staticSetup(myip);
   } else Serial.println("Error with EEPROM");
+  */
+  // if(!ether.dhcpSetup()) Serial.println("DHCP Failed"); //Установка сетевых параметров по DHCP
+  IP = EEPROM.read(1);
+  IP += ".";
+  IP += EEPROM.read(2); 
+  IP += ".";
+  IP += EEPROM.read(3);
+  IP += ".";
+  IP += EEPROM.read(4);
+  ether.parseIp(dhcpIp, IP.c_str());
+  IP = EEPROM.read(1);
+  IP += ".";
+  IP += EEPROM.read(2);
+  IP += ".";
+  IP += EEPROM.read(3);
+  IP += ".";
+  IP += EEPROM.read(4);
+  Serial.println(IP.c_str());
 
-  if(!ether.dhcpSetup()) Serial.println("DHCP Failed"); //Установка сетевых параметров по DHCP
+  ether.staticSetup(dhcpIp, dhcpGw, dhcpDNS, dhcpNet);
+
 
   for (int i = 0 ; i < MAX_LOGIN_LENGTH; i++) {
     if (loadFromEEPROM(17 + i) != NULL) {
@@ -378,7 +403,6 @@ void loop() {
   // Если пришел запрос - начинаем обрабатывать его
   if(pos) {
     data = (char *) Ethernet::buffer + pos;
-    Serial.println(data);
     requestHandler(data);
     if (EEPROM.read(0) == 1) {
       setPage(SETTING);
@@ -447,7 +471,6 @@ void authHandler(char *request) {
 }
 
 void postHandler(char* request) {
-  Serial.println(request);
   if (strstr(request, "ip=") != NULL) {
     char *post = strstr(request, "ip=");
     char *buffer;
@@ -607,8 +630,6 @@ static word httpTest() {
     "<p> <input type = 'text' name = 'text' size = 20></p>"
     "<p> <input type = 'submit' value = 'submit'>  </p>"
     "</form>"
-    "<form method = 'get'>"
-    "</form>"
     "<a href = '?test=test'> TEST </a>"
     ));
   return bfill.position();
@@ -630,7 +651,7 @@ static word resetPage() {
     "<center>"
     "<form method = 'post'>"
     "<p> <em> IP address: </em> </p>"
-    "<p> <input type = 'text' name = 'ip' size = 20> </p>"
+    "<p> <input type = 'text' name = 'IP' size = 20> </p>"
     "<p> <em> Gateway address: </em> </p>"
     "<input type = 'text' name = 'gtw' size = 20>"
     "<p> <em> DNS address: </em> </p>"
@@ -676,9 +697,9 @@ bfill = ether.tcpOffset();
     "<form method='post'>"
     "<input type = 'submit' value = 'SETTINGS' name='settings'>"
     "</form>"
-    "<p> <a href='http://log:out@192.168.1.118/'> EXIT </p>"
+    "<p> <a href='http://log:out@$S/'> EXIT </p>"
     "</center>"
-  ));
+  ), IP.c_str());
   return bfill.position();
 }
 // Возращает true, если хотя бы один из датчиков сработал.
