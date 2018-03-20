@@ -45,6 +45,10 @@
 #define MAX_PASSWORD_LENGTH 6
 #define MAX_LOGIN_LENGTH 6
 
+/*
+* Сетевые реквизиты
+*/
+
 static byte mymac[] = {0x74,0x69,0x69,0x2D,0x30,0x32};
 static byte myip[] = {EEPROM.read(1),EEPROM.read(2),EEPROM.read(3),EEPROM.read(4)};
 String IP; // Нужен для дальнейшего преобразования
@@ -68,14 +72,14 @@ uint8_t dhcpDNS[] = {192, 168, 1, 1};
 char deflogin[] = "310";
 char defpassword[] = "304305";
 
-String authHash;
-
 /*
-* Логин и пароль загруженные с EEPROM, т.е установленные администратором
+* Логин и пароль.
+* Загружаются и выгружаются из EEPROM
+* Задаются в SETTIGNs
 */
 
-char loginFromEEPROM[6];
-char passwordFromEEPROM[6];
+char main_login[6];
+char main_password[6];
 
 /*
 * Перечисления страниц
@@ -248,6 +252,15 @@ void getHandler(char* request);
 
 void postHandler(char * request);
 
+// For debugg
+
+// uint8_t tempIp[4];
+// uint8_t tempGW[4];
+// uint8_t tempDNS[4];
+// uint8_t tempNet[4];
+// char tempLog[6];
+// char tempPass[6];
+
 void setup() {
 
   isActivatedSession = false;
@@ -266,7 +279,8 @@ void setup() {
     ether.staticSetup(myip);
   } else Serial.println("Error with EEPROM");
   */
-  // if(!ether.dhcpSetup()) Serial.println("DHCP Failed"); //Установка сетевых параметров по DHCP
+  // if(!ether.dhcpSetup()) Serial.println("DHCP Failed"); //Установка сетевых реквизитов по DHCP
+
   IP = EEPROM.read(1);
   IP += ".";
   IP += EEPROM.read(2); 
@@ -282,41 +296,35 @@ void setup() {
   IP += EEPROM.read(3);
   IP += ".";
   IP += EEPROM.read(4);
-  Serial.println(IP.c_str());
 
   ether.staticSetup(dhcpIp, dhcpGw, dhcpDNS, dhcpNet);
 
 
   for (int i = 0 ; i < MAX_LOGIN_LENGTH; i++) {
     if (loadFromEEPROM(17 + i) != NULL) {
-      loginFromEEPROM[i] = (char) loadFromEEPROM(17 + i);
+      main_login[i] = (char) loadFromEEPROM(17 + i);
+
     } else break;
   }
 
   for (int i = 0; i < MAX_PASSWORD_LENGTH; i++) {
     if (loadFromEEPROM(23 + i) != NULL) {
-      passwordFromEEPROM[i] = (char) loadFromEEPROM(23 + i);
+      main_password[i] = (char) loadFromEEPROM(23 + i);
     } else break;
   }
 
-  authHash += loginFromEEPROM;
-  authHash += ":";
-  authHash += passwordFromEEPROM;
-  String temp = encodeBase64(authHash); 
-  authHash = temp;
-
-  Serial.println("");
+  Serial.println(F(""));
   Serial.println(F("----------LOAD_FROM_EEPROM------------"));
-  Serial.print("ip = ");
-  Serial.print((byte) loadFromEEPROM(1));
-  Serial.print(".");
+  Serial.print(F("ip = "));
+  Serial.print(((byte) loadFromEEPROM(1)));
+  Serial.print(F("."));
   Serial.print((byte) loadFromEEPROM(2));
-  Serial.print(".");
+  Serial.print(F("."));
   Serial.print((byte) loadFromEEPROM(3));
-  Serial.print(".");
+  Serial.print(F("."));
   Serial.print((byte) loadFromEEPROM(4));
-  Serial.println("");
-  Serial.print("gtw = ");
+  Serial.println(F(""));
+  Serial.print(F("gtw = "));
   Serial.print((byte) loadFromEEPROM(5));
   Serial.print(".");
   Serial.print((byte) loadFromEEPROM(6));
@@ -325,42 +333,42 @@ void setup() {
   Serial.print(".");
   Serial.print((byte) loadFromEEPROM(8));
   Serial.println("");
-  Serial.print("dns = ");
+  Serial.print(F("dns = "));
   Serial.print((byte) loadFromEEPROM(9));
-  Serial.print(".");
+  Serial.print(F("."));
   Serial.print((byte) loadFromEEPROM(10));
-  Serial.print(".");
+  Serial.print(F("."));
   Serial.print((byte) loadFromEEPROM(11));
-  Serial.print(".");
+  Serial.print(F("."));
   Serial.print((byte) loadFromEEPROM(12));
-  Serial.println("");
-  Serial.print("net = ");
+  Serial.println(F(""));
+  Serial.print(F("net = "));
   Serial.print((byte) loadFromEEPROM(13));
-  Serial.print(".");
+  Serial.print(F("."));
   Serial.print((byte) loadFromEEPROM(14));
-  Serial.print(".");
+  Serial.print(F("."));
   Serial.print((byte) loadFromEEPROM(15));
-  Serial.print(".");
+  Serial.print(F("."));
   Serial.print((byte) loadFromEEPROM(16));
-  Serial.println("");
-  Serial.print("login = ");
+  Serial.println(F(""));
+  Serial.print(F("login = "));
   
   for(int i = 0; i < 6; i++) {
-    if (loginFromEEPROM[i] != NULL) {
-      Serial.print(loginFromEEPROM[i]); 
+    if (main_login[i] != NULL) {
+      Serial.print(main_login[i]); 
     }
   }
   
-  Serial.println("");
-  Serial.print("password = ");
+  Serial.println(F(""));
+  Serial.print(F("password = "));
   
   for(int i = 0; i < 6; i++) {
-    if (passwordFromEEPROM[i] != NULL) {
-      Serial.print(passwordFromEEPROM[i]);
+    if (main_password[i] != NULL) {
+      Serial.print(main_password[i]);
     }
   }
 
-  Serial.println("");
+  Serial.println(F(""));
   Serial.println(F("--------------------------------------"));
   Serial.println("");
   Serial.println(F("----------------CONFIG----------------"));
@@ -368,9 +376,6 @@ void setup() {
   ether.printIp("Netmask: ", ether.netmask);
   ether.printIp("GW Ip:" ,ether.gwip);
   ether.printIp("DNS Ip:", ether.dnsip);
-  Serial.print(F("Authorization hash: "));
-  Serial.print(authHash);
-  Serial.println("");
   Serial.println(F("--------------------------------------"));
 
 }
@@ -465,6 +470,14 @@ void setPage(Page p) {
 }
 
 void authHandler(char *request) {
+  String temp;
+  temp += main_login;
+  temp += ":";
+  temp += main_password;
+  Serial.print(F("\n Authorization: "));
+  Serial.print(temp);
+  Serial.println(F(""));
+  String authHash = encodeBase64(temp);
   if (strstr(request, authHash.c_str()) != NULL) {
     setPage(CONTROL);
   } else setPage(AUTHENTICATION);
@@ -559,6 +572,7 @@ void postHandler(char* request) {
           for (int i = 0; i < 6; i++) {
             if (login[i] != NULL) { // Если встречен конец строки - прекращаем
               loadToEEPROM(17 + i, login[i]);
+              main_login[i] = login[i];
             } else break;
           }
         }
@@ -573,6 +587,7 @@ void postHandler(char* request) {
           for (int i = 0; i < 6; i++) {
             if (password[i] != NULL) {
               loadToEEPROM(23 + i, password[i]);
+              main_password[i] = password[i];
             } else break;
           }
         }
@@ -651,7 +666,7 @@ static word resetPage() {
     "<center>"
     "<form method = 'post'>"
     "<p> <em> IP address: </em> </p>"
-    "<p> <input type = 'text' name = 'IP' size = 20> </p>"
+    "<p> <input type = 'text' name = 'ip' size = 20> </p>"
     "<p> <em> Gateway address: </em> </p>"
     "<input type = 'text' name = 'gtw' size = 20>"
     "<p> <em> DNS address: </em> </p>"
