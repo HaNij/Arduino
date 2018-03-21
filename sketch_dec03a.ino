@@ -52,10 +52,10 @@
 static byte mymac[] = {0x74,0x69,0x69,0x2D,0x30,0x32};
 static byte myip[] = {EEPROM.read(1),EEPROM.read(2),EEPROM.read(3),EEPROM.read(4)};
 String IP; // Нужен для дальнейшего преобразования
-uint8_t dhcpIp[4];
-uint8_t dhcpNet[] = {255, 255, 255, 0};
-uint8_t dhcpGw[] = {192, 168, 1, 1};
-uint8_t dhcpDNS[] = {192, 168, 1, 1};
+byte dhcpIp[4];
+byte dhcpNet[] = {255, 255, 255, 0};
+byte dhcpGw[] = {192, 168, 1, 1};
+byte dhcpDNS[] = {192, 168, 1, 1};
 
 /*
 * Настройки по умолчанию сетевых настроек
@@ -252,6 +252,8 @@ void getHandler(char* request);
 
 void postHandler(char * request);
 
+void(* resetFunc) (void) = 0;
+
 // For debugg
 
 // uint8_t tempIp[4];
@@ -262,7 +264,6 @@ void postHandler(char * request);
 // char tempPass[6];
 
 void setup() {
-
   isActivatedSession = false;
   EEPROM.write(0,0);
   pinMode(SENSOR_1_PIN, INPUT); // Подключение датчка D1 на вход.
@@ -281,21 +282,9 @@ void setup() {
   */
   // if(!ether.dhcpSetup()) Serial.println("DHCP Failed"); //Установка сетевых реквизитов по DHCP
 
-  IP = EEPROM.read(1);
-  IP += ".";
-  IP += EEPROM.read(2); 
-  IP += ".";
-  IP += EEPROM.read(3);
-  IP += ".";
-  IP += EEPROM.read(4);
-  ether.parseIp(dhcpIp, IP.c_str());
-  IP = EEPROM.read(1);
-  IP += ".";
-  IP += EEPROM.read(2);
-  IP += ".";
-  IP += EEPROM.read(3);
-  IP += ".";
-  IP += EEPROM.read(4);
+  for(int i = 0; i < 4; i++) {
+    dhcpIp[i] = (byte) loadFromEEPROM(i+1);
+  }
 
   ether.staticSetup(dhcpIp, dhcpGw, dhcpDNS, dhcpNet);
 
@@ -405,6 +394,7 @@ void loop() {
   } else { digitalWrite(RELE_PIN, 0); }
 
 
+
   // Если пришел запрос - начинаем обрабатывать его
   if(pos) {
     data = (char *) Ethernet::buffer + pos;
@@ -498,7 +488,7 @@ void postHandler(char* request) {
           byte n = 1;
           while (ip_token != NULL) {
             //Функция atoi(char * foo) преобразует символьный массив и возвращает число
-            if (n == 1) loadToEEPROM(1, (byte) atoi (ip_token));
+            if (n == 1) loadToEEPROM(1, (byte) atoi(ip_token));
             if (n == 2) loadToEEPROM(2, (byte) atoi(ip_token));
             if (n == 3) loadToEEPROM(3, (byte) atoi(ip_token));
             if (n == 4) loadToEEPROM(4, (byte) atoi(ip_token));
@@ -595,6 +585,7 @@ void postHandler(char* request) {
       token = strtok_r(NULL, "&", &buffer); // выделение следующей части строки (поиск нового токена и выделение его)
       i++; //нужен для определения какой на данный момент номер токена
     }
+    resetFunc();
   } if (strstr(request, "settings=SETTINGS") != NULL) {
     setPage(SETTING);
   }
@@ -696,7 +687,17 @@ static word httpUnauthorized() {
 }
 
 static word controlPage() {
-bfill = ether.tcpOffset();
+
+  String IP;
+  IP = EEPROM.read(1);
+  IP += ".";
+  IP += EEPROM.read(2);
+  IP += ".";
+  IP += EEPROM.read(3);
+  IP += ".";
+  IP += EEPROM.read(4);
+
+  bfill = ether.tcpOffset();
   bfill.emit_p(PSTR(
     "HTTP/1.0 200 OK\r\n"
     "Content-Type: text/html\r\n"
