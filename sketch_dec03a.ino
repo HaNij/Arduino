@@ -50,13 +50,7 @@
 */
 
 static byte mymac[] = {0x74,0x69,0x69,0x2D,0x30,0x32};
-static byte myip[] = {EEPROM.read(1),EEPROM.read(2),EEPROM.read(3),EEPROM.read(4)};
-String IP; // Нужен для дальнейшего преобразования
-byte dhcpIp[4];
-byte dhcpNet[] = {255, 255, 255, 0};
-byte dhcpGw[] = {192, 168, 1, 1};
-byte dhcpDNS[] = {192, 168, 1, 1};
-
+//static byte myip[] = {EEPROM.read(1),EEPROM.read(2),EEPROM.read(3),EEPROM.read(4)};
 /*
 * Настройки по умолчанию сетевых настроек
 */
@@ -90,7 +84,8 @@ enum Page {
   UNKNOWN,
   SETTING,
   AUTHENTICATION,
-  TEST
+  TEST,
+  FOUND
 };
 
 /*
@@ -172,6 +167,8 @@ static word httpUnauthorized();
 *************************** Функции ******************************
 */
 
+void setupNetwork();
+
 /*
 * Функция encodeBase64(char *text)
 * char *text - текст, который нужно закодировать
@@ -252,8 +249,6 @@ void getHandler(char* request);
 
 void postHandler(char * request);
 
-void(* resetFunc) (void) = 0;
-
 // For debugg
 
 // uint8_t tempIp[4];
@@ -263,17 +258,19 @@ void(* resetFunc) (void) = 0;
 // char tempLog[6];
 // char tempPass[6];
 
+void(* resetFunc) (void) = 0;
+
 void setup() {
-  isActivatedSession = false;
-  EEPROM.write(0,0);
+  //ether.powerUp();
   pinMode(SENSOR_1_PIN, INPUT); // Подключение датчка D1 на вход.
   pinMode(SENSOR_2_PIN, INPUT); // Подключение датчка D1 на вход.
   pinMode(RELE_PIN, OUTPUT); // Подключение светодиода S3 на выход.
   Serial.begin(9600);
   if(ether.begin(sizeof Ethernet::buffer,mymac,10) == 0) {
-    Serial.println("Failed to access Ethernet controller");
-  } else //Serial.println("Ethernet controller is ok");
-  
+    Serial.println(F("Failed to access Ethernet controller"));
+  }
+
+  setupNetwork();
   /*if(EEPROM.read(0) == 1) {
     ether.staticSetup(defip);
   } else if (EEPROM.read(0) == 0) {
@@ -281,13 +278,6 @@ void setup() {
   } else Serial.println("Error with EEPROM");
   */
   // if(!ether.dhcpSetup()) Serial.println("DHCP Failed"); //Установка сетевых реквизитов по DHCP
-
-  for(int i = 0; i < 4; i++) {
-    dhcpIp[i] = (byte) loadFromEEPROM(i+1);
-  }
-
-  ether.staticSetup(dhcpIp, dhcpGw, dhcpDNS, dhcpNet);
-
 
   for (int i = 0 ; i < MAX_LOGIN_LENGTH; i++) {
     if (loadFromEEPROM(17 + i) != NULL) {
@@ -357,21 +347,20 @@ void setup() {
     }
   }
 
-  Serial.println(F(""));
-  Serial.println(F("--------------------------------------"));
-  Serial.println("");
-  Serial.println(F("----------------CONFIG----------------"));
-  ether.printIp("Ip: ", ether.myip);
-  ether.printIp("Netmask: ", ether.netmask);
-  ether.printIp("GW Ip:" ,ether.gwip);
-  ether.printIp("DNS Ip:", ether.dnsip);
-  Serial.println(F("--------------------------------------"));
+  // Serial.println(F(""));
+  // Serial.println(F("--------------------------------------"));
+  // Serial.println("");
+  // Serial.println(F("----------------CONFIG----------------"));
+  // ether.printIp("Ip: ", ether.myip);
+  // ether.printIp("Netmask: ", ether.netmask);
+  // ether.printIp("GW Ip:" ,ether.gwip);
+  // ether.printIp("DNS Ip:", ether.dnsip);
+  // Serial.println(F("--------------------------------------"));
 
 }
 
 void loop() {
-  word len = ether.packetReceive();
-  word pos = ether.packetLoop(len);
+  word pos = ether.packetLoop(ether.packetReceive(););
 
   /* Будет кнопка - будет работать)
   if (digitalRead(R1)) {
@@ -397,6 +386,7 @@ void loop() {
 
   // Если пришел запрос - начинаем обрабатывать его
   if(pos) {
+    bfill = ether.tcpOffset();
     data = (char *) Ethernet::buffer + pos;
     requestHandler(data);
     if (EEPROM.read(0) == 1) {
@@ -407,6 +397,21 @@ void loop() {
       } else setPage(AUTHENTICATION);
     }
   }
+}
+
+void setupNetwork() {
+  static byte dhcpIp[4] = {loadFromEEPROM(1), loadFromEEPROM(2), loadFromEEPROM(3), loadFromEEPROM(4)};
+  static byte dhcpNet[4] = {255, 255, 255, 0};
+  static byte dhcpGw[4] = {192, 168, 1, 1};
+  static byte dhcpDNS[4] = {192, 168, 1, 1};
+  ether.staticSetup(dhcpIp, dhcpGw, dhcpDNS, dhcpNet);
+
+  Serial.println(F("----------------CONFIG----------------"));
+  ether.printIp("Ip: ", ether.myip);
+  ether.printIp("Netmask: ", ether.netmask);
+  ether.printIp("GW Ip:" ,ether.gwip);
+  ether.printIp("DNS Ip:", ether.dnsip);
+  Serial.println(F("--------------------------------------"));
 }
 
 String encodeBase64(String text) {
@@ -433,6 +438,7 @@ void loadToEEPROM(int pos, byte whatToSend) {
 }
 
 void setPage(Page p) {
+
   switch(p) {
     case CONTROL: {
       ether.httpServerReply(controlPage());
@@ -456,6 +462,8 @@ void setPage(Page p) {
     case TEST: {
       ether.httpServerReply(httpTest());
     }
+    case FOUND:
+      ether.httpServerReply(http_Found());
   }
 }
 
@@ -474,6 +482,7 @@ void authHandler(char *request) {
 }
 
 void postHandler(char* request) {
+  //Serial.println(request);
   if (strstr(request, "ip=") != NULL) {
     char *post = strstr(request, "ip=");
     char *buffer;
@@ -585,12 +594,13 @@ void postHandler(char* request) {
       token = strtok_r(NULL, "&", &buffer); // выделение следующей части строки (поиск нового токена и выделение его)
       i++; //нужен для определения какой на данный момент номер токена
     }
-    resetFunc();
+
   } if (strstr(request, "settings=SETTINGS") != NULL) {
     setPage(SETTING);
-  }
-  if (strstr(request, "Authorization") != NULL) {
+  } if (strstr(request, "Authorization") != NULL) {
     authHandler(request);
+  } if (strstr(request, "reload=RELOAD") != NULL) {
+    resetFunc();
   }
 }
 
@@ -617,7 +627,7 @@ void requestHandler(char* request) {
 }
 
 static word httpNotFound() {
-  bfill = ether.tcpOffset();
+  // bfill = ether.tcpOffset();
   bfill.emit_p(PSTR(
     "HTTP/1.0 404 Not Found"
   ));
@@ -642,7 +652,8 @@ static word httpTest() {
 }
 
 static word resetPage() {
-  bfill = ether.tcpOffset();
+
+  // bfill = ether.tcpOffset();
   bfill.emit_p(PSTR(
     "HTTP/1.0 202 Accepted\r\n"
     "Content-Type: text/html\r\n"
@@ -670,15 +681,14 @@ static word resetPage() {
     "<p> <em> Password </em> </p>"
     "<p> <input type = 'number' name = 'pass'> </p>"
     "<p> <input type = 'submit' value = 'Submit'> </p>"
-    "</form>"
-    "</center>"
+  "</center>"
 
 ));
   return bfill.position();
 }
 
 static word httpUnauthorized() {
-  bfill = ether.tcpOffset();
+  // bfill = ether.tcpOffset();
   bfill.emit_p(PSTR(
     "HTTP/1.0 401 Unauthorized\r\n"
     "WWW-Authenticate: Basic realm=\"Arduino\""
@@ -697,7 +707,7 @@ static word controlPage() {
   IP += ".";
   IP += EEPROM.read(4);
 
-  bfill = ether.tcpOffset();
+  // bfill = ether.tcpOffset();
   bfill.emit_p(PSTR(
     "HTTP/1.0 200 OK\r\n"
     "Content-Type: text/html\r\n"
@@ -712,10 +722,18 @@ static word controlPage() {
     "<p> ledStatus:</p>"
     "<form method='post'>"
     "<input type = 'submit' value = 'SETTINGS' name='settings'>"
+    "<input type = 'submit' value = 'RELOAD' name='reload'>"
     "</form>"
     "<p> <a href='http://log:out@$S/'> EXIT </p>"
     "</center>"
   ), IP.c_str());
+    return bfill.position();
+}
+
+static word http_Found() {
+  bfill.emit_p(PSTR(
+    "HTTP/1.1 302 Found\r\n"
+    "Location: /\r\n\r\n"));
   return bfill.position();
 }
 // Возращает true, если хотя бы один из датчиков сработал.
