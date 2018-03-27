@@ -28,8 +28,7 @@
 * Пин кнопки сброса
 */
 
-//TODO Выбрать номер пина
-#define BUTTON_RESET_PIN 0
+#define BUTTON_RESET_PIN 2
 
 /*
 * Пин реле питания (свет)
@@ -167,6 +166,18 @@ static word httpUnauthorized();
 *************************** Функции ******************************
 */
 
+/*
+* Функция resetNetwork()
+* Устанавливает сетевые реквизиты по умолчанию
+*/
+
+void resetNetwork();
+
+/*
+* Функция setupNetwork()
+* Загружает из EEPROM сетевые реквизиты и загружает их в ENC28J60
+*/
+
 void setupNetwork();
 
 /*
@@ -249,22 +260,12 @@ void getHandler(char* request);
 
 void postHandler(char * request);
 
-// For debugg
-
-// uint8_t tempIp[4];
-// uint8_t tempGW[4];
-// uint8_t tempDNS[4];
-// uint8_t tempNet[4];
-// char tempLog[6];
-// char tempPass[6];
-
-void(* resetFunc) (void) = 0;
-
 void setup() {
-  //ether.powerUp();
+
   pinMode(SENSOR_1_PIN, INPUT); // Подключение датчка D1 на вход.
   pinMode(SENSOR_2_PIN, INPUT); // Подключение датчка D1 на вход.
   pinMode(RELE_PIN, OUTPUT); // Подключение светодиода S3 на выход.
+  pinMode(BUTTON_RESET_PIN, INPUT);
   Serial.begin(9600);
   if(ether.begin(sizeof Ethernet::buffer,mymac,10) == 0) {
     Serial.println(F("Failed to access Ethernet controller"));
@@ -360,17 +361,14 @@ void setup() {
 }
 
 void loop() {
-  word pos = ether.packetLoop(ether.packetReceive(););
 
-  /* Будет кнопка - будет работать)
-  if (digitalRead(R1)) {
-    EEPROM.write(0,1); // записываем в 0 ячейку сигнал о том, что произошел сброс
+  word pos = ether.packetLoop(ether.packetReceive());
+
+  if (digitalRead(BUTTON_RESET_PIN) == HIGH) {
+    // EEPROM.write(0,1); // записываем в 0 ячейку сигнал о том, что произошел сброс
     delay(1000);
-    Serial.println("Hello");
-    restartArduino(); // рестарт ардуино и переход на страницу настройки
-
+    resetNetwork();
   }
- */
 
   // Если хотя бы один датчик сработал -> присваеваем значение последней отправки значение время работы ардуино.
   if (checkSensor()) {
@@ -389,23 +387,33 @@ void loop() {
     bfill = ether.tcpOffset();
     data = (char *) Ethernet::buffer + pos;
     requestHandler(data);
-    if (EEPROM.read(0) == 1) {
-      setPage(SETTING);
-    } else  if (EEPROM.read(0) == 0) {
-      if (isActivatedSession) {
-        setPage(CONTROL);
-      } else setPage(AUTHENTICATION);
-    }
+    authHandler(data);
   }
 }
 
 void setupNetwork() {
-  static byte dhcpIp[4] = {loadFromEEPROM(1), loadFromEEPROM(2), loadFromEEPROM(3), loadFromEEPROM(4)};
-  static byte dhcpNet[4] = {255, 255, 255, 0};
-  static byte dhcpGw[4] = {192, 168, 1, 1};
-  static byte dhcpDNS[4] = {192, 168, 1, 1};
-  ether.staticSetup(dhcpIp, dhcpGw, dhcpDNS, dhcpNet);
+  //TODO сделать загрузку из EEPROM
+  static byte ip[4] = {loadFromEEPROM(1), loadFromEEPROM(2), loadFromEEPROM(3), loadFromEEPROM(4)};
+  static byte netmask[4] = {loadFromEEPROM(5), loadFromEEPROM(6), loadFromEEPROM(7), loadFromEEPROM(8)};
+  static byte gtw[4] = {loadFromEEPROM(13), loadFromEEPROM(14), loadFromEEPROM(15), loadFromEEPROM(16)};
+  static byte dns[4] = {loadFromEEPROM(9), loadFromEEPROM(10), loadFromEEPROM(11), loadFromEEPROM(12)};
+  ether.staticSetup(ip, gtw, dns, netmask);
 
+  Serial.println(F("----------------CONFIG----------------"));
+  ether.printIp("Ip: ", ether.myip);
+  ether.printIp("Netmask: ", ether.netmask);
+  ether.printIp("GW Ip:" ,ether.gwip);
+  ether.printIp("DNS Ip:", ether.dnsip);
+  Serial.println(F("--------------------------------------"));
+}
+
+void resetNetwork() {
+
+  static byte ip[4] = {192, 168, 1, 113};
+  static byte netmask[4] = {255, 255, 255, 0};
+  static byte dns[4] = {192, 168, 1, 1};
+  static byte gtw[4] = {192, 168, 1, 1};
+  ether. staticSetup(ip,gtw,dns,netmask);
   Serial.println(F("----------------CONFIG----------------"));
   ether.printIp("Ip: ", ether.myip);
   ether.printIp("Netmask: ", ether.netmask);
@@ -482,7 +490,7 @@ void authHandler(char *request) {
 }
 
 void postHandler(char* request) {
-  //Serial.println(request);
+
   if (strstr(request, "ip=") != NULL) {
     char *post = strstr(request, "ip=");
     char *buffer;
@@ -599,8 +607,6 @@ void postHandler(char* request) {
     setPage(SETTING);
   } if (strstr(request, "Authorization") != NULL) {
     authHandler(request);
-  } if (strstr(request, "reload=RELOAD") != NULL) {
-    resetFunc();
   }
 }
 
@@ -627,7 +633,7 @@ void requestHandler(char* request) {
 }
 
 static word httpNotFound() {
-  // bfill = ether.tcpOffset();
+
   bfill.emit_p(PSTR(
     "HTTP/1.0 404 Not Found"
   ));
@@ -707,7 +713,6 @@ static word controlPage() {
   IP += ".";
   IP += EEPROM.read(4);
 
-  // bfill = ether.tcpOffset();
   bfill.emit_p(PSTR(
     "HTTP/1.0 200 OK\r\n"
     "Content-Type: text/html\r\n"
@@ -722,7 +727,6 @@ static word controlPage() {
     "<p> ledStatus:</p>"
     "<form method='post'>"
     "<input type = 'submit' value = 'SETTINGS' name='settings'>"
-    "<input type = 'submit' value = 'RELOAD' name='reload'>"
     "</form>"
     "<p> <a href='http://log:out@$S/'> EXIT </p>"
     "</center>"
