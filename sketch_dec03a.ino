@@ -19,10 +19,10 @@
 * Пины для датчиков движения
 */
 
-#define SENSOR_1_PIN 10
-#define SENSOR_2_PIN 11
-#define SENSOR_3_PIN 12
-#define SENSOR_4_PIN 13
+#define SENSOR_1_PIN 4
+#define SENSOR_2_PIN 5
+#define SENSOR_3_PIN 6
+#define SENSOR_4_PIN 7
 
 /*
 * Пин кнопки сброса
@@ -35,7 +35,7 @@
 */
 
 //TODO Выбрать номер пина
-#define RELE_PIN 0
+#define RELE_PIN 3
 
 /*
 * Максимальная длина логина и пароля
@@ -263,8 +263,8 @@ void postHandler(char * request);
 void setup() {
 
   pinMode(SENSOR_1_PIN, INPUT); // Подключение датчка D1 на вход.
-  pinMode(SENSOR_2_PIN, INPUT); // Подключение датчка D1 на вход.
-  pinMode(RELE_PIN, OUTPUT); // Подключение светодиода S3 на выход.
+  pinMode(SENSOR_2_PIN, INPUT); // Подключение датчка D2 на вход.
+  pinMode(RELE_PIN, OUTPUT); //
   pinMode(BUTTON_RESET_PIN, INPUT);
   Serial.begin(9600);
   if(ether.begin(sizeof Ethernet::buffer,mymac,10) == 0) {
@@ -272,12 +272,6 @@ void setup() {
   }
 
   setupNetwork();
-  /*if(EEPROM.read(0) == 1) {
-    ether.staticSetup(defip);
-  } else if (EEPROM.read(0) == 0) {
-    ether.staticSetup(myip);
-  } else Serial.println("Error with EEPROM");
-  */
   // if(!ether.dhcpSetup()) Serial.println("DHCP Failed"); //Установка сетевых реквизитов по DHCP
 
   for (int i = 0 ; i < MAX_LOGIN_LENGTH; i++) {
@@ -476,6 +470,7 @@ void setPage(Page p) {
 }
 
 void authHandler(char *request) {
+
   String temp;
   temp += main_login;
   temp += ":";
