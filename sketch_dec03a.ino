@@ -84,7 +84,8 @@ enum Page {
   SETTING,
   AUTHENTICATION,
   TEST,
-  FOUND
+  FOUND,
+  SETTINGAR
 };
 
 /*
@@ -122,6 +123,19 @@ bool isActivatedSession;
 
 /*
 *************************** HTML страницы ******************************
+*/
+
+/*
+* Функция static word arduinoSettings()
+* возвращает страницу настроек для арудино
+*/
+
+
+static word arduinoSettings();
+
+/*
+* Функция static word httpTest()
+* возвращает новую страницу
 */
 
 static word httpTest();
@@ -262,6 +276,7 @@ void postHandler(char * request);
 
 void setup() {
 
+
   pinMode(SENSOR_1_PIN, INPUT); // Подключение датчка D1 на вход.
   pinMode(SENSOR_2_PIN, INPUT); // Подключение датчка D2 на вход.
   pinMode(RELE_PIN, OUTPUT); //
@@ -370,9 +385,11 @@ void loop() {
   }
 
   // Секундомер
-  if (millis() - previousMillis <= interval) {
-    digitalWrite(RELE_PIN, 1);
-  } else { digitalWrite(RELE_PIN, 0); }
+  if (true) { // Если с датчика освещенности пришло 200 люксов тогда включаем режим авто иначе выключаем свет, т.е когда темно включается режим света, когда светло ничего не работает
+    if (millis() - previousMillis <= interval) {
+      digitalWrite(RELE_PIN, 1);
+    } else { digitalWrite(RELE_PIN, 0); }
+  } else digitalWrite(RELE_PIN, 0);
 
 
 
@@ -386,7 +403,7 @@ void loop() {
 }
 
 void setupNetwork() {
-  //TODO сделать загрузку из EEPROM
+
   static byte ip[4] = {loadFromEEPROM(1), loadFromEEPROM(2), loadFromEEPROM(3), loadFromEEPROM(4)};
   static byte netmask[4] = {loadFromEEPROM(5), loadFromEEPROM(6), loadFromEEPROM(7), loadFromEEPROM(8)};
   static byte gtw[4] = {loadFromEEPROM(13), loadFromEEPROM(14), loadFromEEPROM(15), loadFromEEPROM(16)};
@@ -417,6 +434,7 @@ void resetNetwork() {
 }
 
 String encodeBase64(String text) {
+
   char temp[text.length()];
   strcpy(temp, text.c_str());
   int encodedLength = Base64.encodedLength(sizeof(temp));
@@ -627,6 +645,29 @@ void requestHandler(char* request) {
   }
 }
 
+static word arduinoSettings() {
+  bfill.emit_p(PSTR(
+    "HTTP/1.0 200 OK\r\n"
+    "Content-Type: text/html\r\n"
+    "Pragma: no-cache\r\n"
+    "\r\n"
+    "<title> Arduino settings </title>"
+    "<body text = '#505452' bgcolor = '#f2f2f2'>"
+    "</body>"
+    "<h2 align = 'center'> Settings for arduino </h2>"
+    "<hr>"
+    "<center>"
+    "<form method='post'>"
+    "<p> <em> Sensitivity light Sensor (lux) </em> </p>"
+    "<p> <input type = 'number' name = 'sens'> </p>"
+    "<p> <em> Timer (ms)</em> </p>"
+    "<p> <input type = 'number' name = 'timer'> </p>" 
+    "</form>"
+    "</center>"
+
+  ));
+}
+
 static word httpNotFound() {
 
   bfill.emit_p(PSTR(
@@ -636,7 +677,7 @@ static word httpNotFound() {
 }
 
 static word httpTest() {
-  bfill = ether.tcpOffset();
+
   bfill.emit_p(PSTR(
     "HTTP/1.0 200 OK\r\n"
     "Content-Type: text/html\r\n"
@@ -654,7 +695,6 @@ static word httpTest() {
 
 static word resetPage() {
 
-  // bfill = ether.tcpOffset();
   bfill.emit_p(PSTR(
     "HTTP/1.0 202 Accepted\r\n"
     "Content-Type: text/html\r\n"
@@ -689,7 +729,7 @@ static word resetPage() {
 }
 
 static word httpUnauthorized() {
-  // bfill = ether.tcpOffset();
+
   bfill.emit_p(PSTR(
     "HTTP/1.0 401 Unauthorized\r\n"
     "WWW-Authenticate: Basic realm=\"Arduino\""
@@ -721,7 +761,8 @@ static word controlPage() {
     "<center>"
     "<p> ledStatus:</p>"
     "<form method='post'>"
-    "<input type = 'submit' value = 'SETTINGS' name='settings'>"
+    "<p> <input type = 'submit' value = 'NETWORK SETTINGS' name= 'netsettings'> </p>"
+    "<p> <input type = 'submit' value = 'ARDUINO SETTINGS' name= 'ardsettings' </p>"
     "</form>"
     "<p> <a href='http://log:out@$S/'> EXIT </p>"
     "</center>"
@@ -730,6 +771,7 @@ static word controlPage() {
 }
 
 static word http_Found() {
+
   bfill.emit_p(PSTR(
     "HTTP/1.1 302 Found\r\n"
     "Location: /\r\n\r\n"));
@@ -737,6 +779,7 @@ static word http_Found() {
 }
 // Возращает true, если хотя бы один из датчиков сработал.
 boolean checkSensor() {
+
   if (digitalRead(SENSOR_1_PIN) || digitalRead(SENSOR_2_PIN)) {
     return true;
   } else return false;
