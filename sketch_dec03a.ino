@@ -481,9 +481,16 @@ void setPage(Page p) {
     }
     case TEST: {
       ether.httpServerReply(httpTest());
+      break;
     }
-    case FOUND:
+    case FOUND: {
       ether.httpServerReply(http_Found());
+      break;
+    }
+    case SETTINGAR: {
+      ether.httpServerReply(arduinoSettings());
+    }
+
   }
 }
 
@@ -616,8 +623,21 @@ void postHandler(char* request) {
       i++; //нужен для определения какой на данный момент номер токена
     }
 
-  } if (strstr(request, "settings=SETTINGS") != NULL) {
+  } if (strstr(request, "sens") != NULL) {
+    char *post = strstr(request, "sens");
+    char *token = strtok(post, "&");
+    int n = 1;
+    while (token != NULL) {
+      if (n == 1) loadToEEPROM(30, (byte) atoi(token));
+      if (n == 2) loadToEEPROM(31, (byte) atoi(token));
+      token = strtok(NULL, "&");
+      n++;
+    }
+
+  } if (strstr(request, "netsettings") != NULL) { 
     setPage(SETTING);
+  } if (strstr(request, "ardsettings") != NULL) {
+    setPage(SETTINGAR);
   } if (strstr(request, "Authorization") != NULL) {
     authHandler(request);
   }
@@ -636,6 +656,7 @@ void getHandler(char* request) {
 */
 
 void requestHandler(char* request) {
+
   if (strstr(request, "GET /") != NULL) {
     getHandler(request);
   } else if (strstr(request, "POST /") != NULL) {
@@ -646,6 +667,7 @@ void requestHandler(char* request) {
 }
 
 static word arduinoSettings() {
+
   bfill.emit_p(PSTR(
     "HTTP/1.0 200 OK\r\n"
     "Content-Type: text/html\r\n"
@@ -666,6 +688,7 @@ static word arduinoSettings() {
     "</center>"
 
   ));
+  return bfill.position();
 }
 
 static word httpNotFound() {
